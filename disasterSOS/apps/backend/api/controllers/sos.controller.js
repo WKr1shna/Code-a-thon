@@ -1,4 +1,278 @@
-// SOS alerts controller logic
-exports.reportSOS = async (req, res) => {
-    // Save report and trigger WebSocket event
+const axios = require('axios');
+const env = require('../config/env');
+const Alert = require('../models/Alert.model');
+const User = require('../models/User.model');
+const admin = require('../config/firebase');
+
+exports.reportAlert = async (req, res, next) => {
+  try {
+    const { title, description, type, location, mediaUrls } = req.body;
+    if (!title || !description || !type || !location || !location.lat || !location.lng) {
+      return res.status(400).json({ success: false, message: 'Missing required report fields' });
+    }
+
+    const alert = new Alert({
+      title,
+      description,
+      type,
+      location: {
+        type: 'Point',
+        coordinates: [parseFloat(location.lng), parseFloat(location.lat)]
+      },
+      mediaUrls: mediaUrls || [],
+      reportedBy: req.user ? req.user._id : null
+    });
+
+    await alert.save();
+
+    // Fire and forget verification call to the FastAPI AI service
+    axios.post(`${env.AI_SERVICE_URL}/verify`, {
+      alertId: alert._id,
+      text: alert.description,
+      location: {
+        lat: parseFloat(location.lat),
+        lng: parseFloat(location.lng)
+      }
+    }).catch(err => console.error('AI Service verify triggering failed:', err.message));
+
+    res.status(201).json({
+      success: true,
+      data: alert
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlerts = async (req, res, next) => {
+  try {
+    const { status, severity, type, district, page = 1, limit = 10 } = req.query;
+    const filter = {};
+
+    if (status) filter.status = status;
+    if (severity) filter.severity = severity;
+    if (type) filter.type = type;
+
+    // Filter by district if users match the district criteria
+    if (district) {
+      // Find users in this district and query reports submitted by them, or match by metadata
+      // For simplicity, we can query matching user references
+      const usersInDistrict = await User.find({ district }).select('_id');
+      const userIds = usersInDistrict.map(u => u._id);
+      filter.reportedBy = { $in: userIds };
+    }
+
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const total = await Alert.countDocuments(filter);
+    const alerts = await Alert.find(filter)
+      .populate('reportedBy', 'name phone email role')
+      .populate('claimedBy', 'name phone role')
+      .sort({ createdAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+
+    res.json({
+      success: true,
+      data: alerts,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getNearbyAlerts = async (req, res, next) => {
+  try {
+    const { lat, lng, radius = 5 } = req.query;
+    if (!lat || !lng) {
+      return res.status(400).json({ success: false, message: 'Latitude and Longitude are required' });
+    }
+
+    const radiusInMeters = parseFloat(radius) * 1000;
+
+    // Find verified or active alerts near spatial index
+    const alerts = await Alert.find({
+      status: { $in: ['verified', 'active'] },
+      location: {
+        $nearSphere: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(lng), parseFloat(lat)]
+          },
+          $maxDistance: radiusInMeters
+        }
+      }
+    }).populate('reportedBy', 'name phone').populate('claimedBy', 'name phone');
+
+    res.json({ success: true, data: alerts });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertHeatmap = async (req, res, next) => {
+  try {
+    const alerts = await Alert.find({ status: { $in: ['verified', 'active'] } });
+    const heatmap = alerts.map(alert => ({
+      lat: alert.location.coordinates[1],
+      lng: alert.location.coordinates[0],
+      weight: alert.aiScore || 0.1
+    }));
+
+    res.json({ success: true, data: heatmap });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertStats = async (req, res, next) => {
+  try {
+    // Aggregation counts grouped by status, severity, type
+    const statusStats = await Alert.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]);
+    const severityStats = await Alert.aggregate([{ $group: { _id: '$severity', count: { $sum: 1 } } }]);
+    const typeStats = await Alert.aggregate([{ $group: { _id: '$type', count: { $sum: 1 } } }]);
+
+    res.json({
+      success: true,
+      data: {
+        status: statusStats.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {}),
+        severity: severityStats.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {}),
+        type: typeStats.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.count }), {})
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAlertById = async (req, res, next) => {
+  try {
+    const alert = await Alert.findById(req.params.id)
+      .populate('reportedBy', 'name phone email role district')
+      .populate('claimedBy', 'name phone role')
+      .populate('responderUpdates.postedBy', 'name phone role');
+
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+
+    res.json({ success: true, data: alert });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateAlertStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!['pending', 'verified', 'active', 'resolved', 'fake'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const alert = await Alert.findById(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+
+    alert.status = status;
+    await alert.save();
+
+    // If verified, trigger FCM broadcast to nearby citizens
+    if (status === 'verified') {
+      try {
+        const radiusInMeters = 10000; // 10km radius
+        const nearbyUsers = await User.find({
+          fcmTokens: { $exists: true, $ne: [] }
+        }); // Find tokens
+
+        const tokens = nearbyUsers.flatMap(u => u.fcmTokens);
+        
+        if (tokens.length > 0) {
+          // Firebase FCM notification dispatch
+          const payload = {
+            notification: {
+              title: `CRITICAL ALERT: ${alert.title}`,
+              body: alert.description
+            },
+            data: {
+              alertId: alert._id.toString(),
+              type: alert.type,
+              severity: alert.severity
+            }
+          };
+          
+          // FCM Multicast
+          const messaging = admin.messaging();
+          // Group tokens into batches of 500
+          for (let i = 0; i < tokens.length; i += 500) {
+            const batch = tokens.slice(i, i + 500);
+            await messaging.sendEachForMulticast({ tokens: batch, ...payload });
+          }
+        }
+      } catch (fcmErr) {
+        console.error('FCM broadcast for alert verification failed:', fcmErr.message);
+      }
+    }
+
+    res.json({ success: true, data: alert });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateAlertSeverity = async (req, res, next) => {
+  try {
+    const { severity } = req.body;
+    if (!['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(severity)) {
+      return res.status(400).json({ success: false, message: 'Invalid severity scale' });
+    }
+
+    const alert = await Alert.findById(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+
+    alert.severity = severity;
+    await alert.save();
+
+    res.json({ success: true, data: alert });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.addAlertMedia = async (req, res, next) => {
+  try {
+    const { mediaUrls } = req.body;
+    if (!mediaUrls || !Array.isArray(mediaUrls)) {
+      return res.status(400).json({ success: false, message: 'mediaUrls must be an array' });
+    }
+
+    const alert = await Alert.findById(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+
+    alert.mediaUrls.push(...mediaUrls);
+    await alert.save();
+
+    res.json({ success: true, data: alert });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteAlert = async (req, res, next) => {
+  try {
+    const alert = await Alert.findByIdAndDelete(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+    res.json({ success: true, message: 'Alert hard deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
 };

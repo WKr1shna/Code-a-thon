@@ -1,4 +1,23 @@
-// Multer config for incident photo upload
 const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
+
+// Configure memory storage (ideal for direct upload buffering to Firebase Cloud Storage)
+const storage = multer.memoryStorage();
+
+// File filter to allow only image mime-types
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only image uploads are allowed!'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5 MB maximum size limit
+  }
+});
+
 module.exports = upload;
