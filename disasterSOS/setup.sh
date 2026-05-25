@@ -44,8 +44,8 @@ npm install
 cd ../../..
 
 # 3. Install web frontend client node dependencies
-echo "Installing Web App dependencies..."
-cd apps/web
+echo "Installing Web App (RakshAlert) dependencies..."
+cd apps/rakshalert
 npm install
 cd ../..
 
@@ -59,5 +59,5 @@ echo "3. Run seed command to populate mock database accounts (Admin, NGO, NDRF, 
 echo "   cd apps/backend/api && npm run seed"
 echo "4. Spin up dev servers:"
 echo "   - Backend API: cd apps/backend/api && npm run dev"
-echo "   - Web Client: cd apps/web && npm run dev"
+echo "   - Web Client: cd apps/rakshalert && npm run dev"
 echo "==========================================="

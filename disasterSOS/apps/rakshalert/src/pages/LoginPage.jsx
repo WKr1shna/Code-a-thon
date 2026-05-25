@@ -16,9 +16,10 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const userData = await login(email || (activeTab === 'admin' ? 'admin' : 'user'), password, activeTab);
+      const userData = await login(email || (activeTab === 'admin' ? 'admin@disastersos.com' : 'citizen@disastersos.com'), password, activeTab);
       if (userData) {
-        if (userData.role === 'SUPER_ADMIN' || userData.role === 'ADMIN') {
+        const userRole = userData.role ? userData.role.toUpperCase() : '';
+        if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') {
           navigate('/admin');
         } else {
           navigate('/dashboard');
@@ -104,17 +105,17 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
-                {activeTab === 'admin' ? 'Admin ID' : 'Email Address'}
+                {activeTab === 'admin' ? 'Admin Email' : 'Email Address'}
               </label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input 
-                  type={activeTab === 'admin' ? 'text' : 'email'}
+                  type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={`w-full pl-12 pr-4 py-3 rounded-xl outline-none focus:ring-2 ${activeTab === 'admin' ? 'bg-white border border-red-200 focus:ring-red-500/20' : 'bg-gray-50 border border-gray-200 focus:ring-blue-500/20'}`}
-                  placeholder={activeTab === 'admin' ? 'admin_id_here' : 'name@example.com'}
+                  placeholder={activeTab === 'admin' ? 'admin@disastersos.com' : 'name@example.com'}
                 />
               </div>
             </div>

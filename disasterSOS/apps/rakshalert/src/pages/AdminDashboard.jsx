@@ -22,6 +22,16 @@ export default function AdminDashboard() {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
+  const mapIncidents = (rawList) => {
+    return (rawList || []).map(inc => ({
+      ...inc,
+      id: inc.id || inc._id,
+      lat: inc.lat || (inc.location?.coordinates && inc.location.coordinates[1]) || 12.9716,
+      lng: inc.lng || (inc.location?.coordinates && inc.location.coordinates[0]) || 77.5946,
+      reporter: inc.reporter || { fullName: inc.reportedBy?.name || 'Citizen' }
+    }));
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -34,10 +44,13 @@ export default function AdminDashboard() {
       ]);
 
       if (analyticsRes.data.success) setStats(analyticsRes.data.data);
-      if (queueRes.data.success) setFakeQueue(queueRes.data.data);
+      if (queueRes.data.success) setFakeQueue(mapIncidents(queueRes.data.data));
       if (broadcastRes.data.success) setBroadcasts(broadcastRes.data.data);
       if (personnelRes.data.success) setPersonnel(personnelRes.data.data);
-      if (incidentsRes.data.success) setIncidents(incidentsRes.data.data.incidents);
+      if (incidentsRes.data.success) {
+        const rawIncidents = Array.isArray(incidentsRes.data.data) ? incidentsRes.data.data : (incidentsRes.data.data.incidents || []);
+        setIncidents(mapIncidents(rawIncidents));
+      }
     } catch (error) {
       toast.error('Failed to load dashboard data');
       console.error(error);

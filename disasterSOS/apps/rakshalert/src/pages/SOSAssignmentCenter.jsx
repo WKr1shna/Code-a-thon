@@ -52,7 +52,7 @@ export default function SOSAssignmentCenter() {
     const interval = setInterval(fetchData, 30000); // Fallback polling (30s)
 
     // Setup Socket.IO listener for live updates
-    const socket = io('http://localhost:5005');
+    const socket = io('http://localhost:5001');
 
     socket.on('connect', () => {
       console.log('[SOCKET] Connected to dispatch server');
@@ -78,7 +78,15 @@ export default function SOSAssignmentCenter() {
   const fetchData = async () => {
     try {
       const incRes = await api.get('/sos');
-      setIncidents(incRes.data.data);
+      const rawIncidents = Array.isArray(incRes.data.data) ? incRes.data.data : (incRes.data.data.incidents || []);
+      const mappedIncidents = rawIncidents.map(inc => ({
+        ...inc,
+        id: inc.id || inc._id,
+        lat: inc.lat || (inc.location?.coordinates && inc.location.coordinates[1]) || 12.9716,
+        lng: inc.lng || (inc.location?.coordinates && inc.location.coordinates[0]) || 77.5946,
+        reporter: inc.reporter || { fullName: inc.reportedBy?.name || 'Citizen' }
+      }));
+      setIncidents(mappedIncidents);
       
       const resRes = await api.get('/sos/available-resources');
       setResources(resRes.data.data);
@@ -126,8 +134,6 @@ export default function SOSAssignmentCenter() {
       toast.error("Failed to dispatch resource");
     }
   };
-
-
 
   return (
     <div className="h-screen bg-[#0a0e1a] text-white flex flex-col font-sans overflow-hidden">

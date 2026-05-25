@@ -7,7 +7,7 @@ A production-ready platform designed to coordinate relief, track first responder
 ```text
 disasterSOS/
 ├── apps/
-│   ├── web/                 # Next.js Frontend App Router Layout
+│   ├── rakshalert/          # Vite React Frontend Command Center
 │   ├── admin/               # Standalone National Analytics Portal
 │   ├── mobile/              # Kotlin Android Application
 │   └── backend/             
@@ -63,8 +63,8 @@ Run `npm install` inside each application directory:
 cd apps/backend/api
 npm install
 
-# 2. Install Web Client app dependencies
-cd ../../web
+# 2. Install Web Client (RakshAlert) dependencies
+cd ../../rakshalert
 npm install
 ```
 
@@ -97,12 +97,12 @@ npm run dev
 ```
 *Runs backend listener on: `http://localhost:5001`*
 
-#### B. Run Next.js Web App
+#### B. Run Vite React Web App (RakshAlert)
 ```bash
-cd apps/web
+cd apps/rakshalert
 npm run dev
 ```
-*Runs Next.js client on: `http://localhost:3000`*
+*Runs RakshAlert client on: `http://localhost:5173`*
 
 #### C. Run Python AI Engine (Optional)
 Create a Python virtual environment and run the FastAPI server:

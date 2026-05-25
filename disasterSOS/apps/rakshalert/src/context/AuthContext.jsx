@@ -5,6 +5,17 @@ import api from '../services/api';
 
 const AuthContext = createContext(null);
 
+const mapRoleForFrontend = (role) => {
+  if (!role) return '';
+  const mapping = {
+    'admin': 'ADMIN',
+    'ngo': 'COORDINATOR',
+    'ndrf': 'RESPONDER',
+    'citizen': 'VOLUNTEER'
+  };
+  return mapping[role.toLowerCase()] || role.toUpperCase();
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,7 +26,9 @@ export const AuthProvider = ({ children }) => {
     const storedToken = localStorage.getItem('rakshalert_token');
     
     if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      parsedUser.role = mapRoleForFrontend(parsedUser.role);
+      setUser(parsedUser);
     }
     setLoading(false);
   }, []);
@@ -26,6 +39,8 @@ export const AuthProvider = ({ children }) => {
       
       if (response.data.success) {
         const { user: userData, accessToken } = response.data.data;
+        
+        userData.role = mapRoleForFrontend(userData.role);
         
         setUser(userData);
         localStorage.setItem('rakshalert_user', JSON.stringify(userData));

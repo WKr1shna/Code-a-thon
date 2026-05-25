@@ -20,11 +20,30 @@ export default function UserDashboard() {
     fetchIncidents();
   }, []);
 
+  const mapTypeToBackend = (type) => {
+    const mapping = {
+      'Medical': 'other',
+      'Fire': 'fire',
+      'Flood': 'flood',
+      'Collapse': 'urban',
+      'Other': 'other'
+    };
+    return mapping[type] || 'other';
+  };
+
   const fetchIncidents = async () => {
     try {
       const res = await api.get('/incidents?limit=10');
       if (res.data.success) {
-        setIncidents(res.data.data.incidents);
+        const rawIncidents = Array.isArray(res.data.data) ? res.data.data : (res.data.data.incidents || []);
+        const mappedIncidents = rawIncidents.map(inc => ({
+          ...inc,
+          id: inc.id || inc._id,
+          lat: inc.lat || (inc.location?.coordinates && inc.location.coordinates[1]) || 12.9716,
+          lng: inc.lng || (inc.location?.coordinates && inc.location.coordinates[0]) || 77.5946,
+          reporter: inc.reporter || { fullName: inc.reportedBy?.name || 'Citizen' }
+        }));
+        setIncidents(mappedIncidents);
       }
     } catch (err) {
       console.error(err);
@@ -44,9 +63,11 @@ export default function UserDashboard() {
       const res = await api.post('/incidents', {
         title: `${emergencyType} Emergency Reported`,
         description: emergencyDesc,
-        type: emergencyType,
-        lat,
-        lng
+        type: mapTypeToBackend(emergencyType),
+        location: {
+          lat,
+          lng
+        }
       });
 
       if (res.data.success) {

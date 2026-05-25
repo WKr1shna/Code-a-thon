@@ -31,17 +31,19 @@ export default function SignupPage() {
     
     try {
       const roleMap = {
-        'citizen': 'VOLUNTEER',
-        'ngo': 'COORDINATOR',
-        'ndrf': 'RESPONDER'
+        'citizen': 'citizen',
+        'ngo': 'ngo',
+        'ndrf': 'ndrf'
       };
 
       const res = await api.post('/auth/register', {
-        fullName: formData.name,
+        name: formData.name,
         email: formData.email,
-        phoneNumber: formData.phone || `+91${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+        phone: formData.phone || `+91${Math.floor(Math.random() * 9000000000) + 1000000000}`,
         password: formData.password,
-        role: roleMap[formData.role]
+        role: roleMap[formData.role] || 'citizen',
+        district: formData.district || 'Unknown',
+        language: formData.language || 'English'
       });
 
       if (res.data.success) {
