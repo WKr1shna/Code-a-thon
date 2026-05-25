@@ -2,6 +2,10 @@
 node_modules/
 npm-debug.log
 .env
+.next/
+out/
+build/
+dist/
 
 # Python caching
 __pycache__/
