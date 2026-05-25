@@ -5,9 +5,10 @@ const User = require('../models/User.model');
 const BroadcastLog = require('../models/BroadcastLog.model');
 
 // Initialize Twilio client
-const twilioClient = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN 
+const twilioClient = env.TWILIO_ACCOUNT_SID && env.TWILIO_ACCOUNT_SID.startsWith('AC') && env.TWILIO_AUTH_TOKEN 
   ? twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN) 
   : null;
+
 
 exports.sendPushNotification = async (req, res, next) => {
   try {
