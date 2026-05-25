@@ -2,6 +2,7 @@ const axios = require('axios');
 const env = require('../config/env');
 const Alert = require('../models/Alert.model');
 const User = require('../models/User.model');
+const Volunteer = require('../models/Volunteer.model');
 const admin = require('../config/firebase');
 
 exports.reportAlert = async (req, res, next) => {
@@ -168,7 +169,8 @@ exports.getAlertById = async (req, res, next) => {
 exports.updateAlertStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
-    if (!['pending', 'verified', 'active', 'resolved', 'fake'].includes(status)) {
+    const statusLower = status ? status.toLowerCase() : '';
+    if (!['pending', 'verified', 'active', 'resolved', 'fake'].includes(statusLower)) {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
@@ -177,7 +179,7 @@ exports.updateAlertStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Alert not found' });
     }
 
-    alert.status = status;
+    alert.status = statusLower;
     await alert.save();
 
     // If verified, trigger FCM broadcast to nearby citizens
@@ -272,6 +274,105 @@ exports.deleteAlert = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Alert not found' });
     }
     res.json({ success: true, message: 'Alert hard deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.assignAlert = async (req, res, next) => {
+  try {
+    const { teamId, priority, assignmentNotes } = req.body;
+    
+    if (!teamId) {
+      return res.status(400).json({ success: false, message: 'Team ID is required for assignment' });
+    }
+
+    const alert = await Alert.findById(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+
+    alert.claimedBy = teamId;
+    if (priority) {
+      alert.severity = priority;
+    }
+    alert.status = 'active';
+
+    if (assignmentNotes) {
+      alert.responderUpdates.push({
+        text: `Assigned: ${assignmentNotes}`,
+        postedBy: req.user._id
+      });
+    }
+
+    await alert.save();
+
+    const populatedAlert = await Alert.findById(alert._id)
+      .populate('reportedBy', 'name phone email role')
+      .populate('claimedBy', 'name phone role');
+
+    // Emit live update
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('sos_update', populatedAlert);
+    }
+
+    res.json({ success: true, data: populatedAlert });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAvailableResources = async (req, res, next) => {
+  try {
+    // 1. Fetch available NDRF users (Responders)
+    const ndrfUsers = await User.find({ role: 'ndrf' });
+    const responders = ndrfUsers.map(u => ({
+      id: u._id.toString(),
+      name: u.name,
+      phone: u.phone,
+      status: 'AVAILABLE',
+      district: u.district || 'Chennai'
+    }));
+
+    // 2. Fetch available Volunteers
+    const volunteerRecords = await Volunteer.find({ status: 'available' }).populate('userId');
+    let volunteers = volunteerRecords.map(v => ({
+      id: v._id.toString(),
+      name: v.userId?.name || 'Volunteer',
+      phone: v.userId?.phone || '+919999999999',
+      skills: v.skills && v.skills.length > 0 ? v.skills : ['Rescue Ops', 'First Aid'],
+      status: 'AVAILABLE'
+    }));
+
+    // Fallback if no volunteers in DB
+    if (volunteers.length === 0) {
+      const citizenUsers = await User.find({ role: 'citizen' }).limit(5);
+      volunteers = citizenUsers.map(u => ({
+        id: u._id.toString(),
+        name: u.name,
+        phone: u.phone,
+        skills: ['First Aid', 'Relief Supply', 'Basic Life Support'],
+        status: 'AVAILABLE'
+      }));
+    }
+
+    // 3. Dynamic Mock Vehicles scattered around Chennai/Bengaluru for Leaflet Map
+    const vehicles = [
+      { id: 'v1', type: 'Rescue Ambulance', status: 'AVAILABLE', lat: 12.972, lng: 77.595, fuel: 85, capacity: '4 Personnel' },
+      { id: 'v2', type: 'NDRF Inflatable Boat', status: 'AVAILABLE', lat: 12.985, lng: 77.605, fuel: 90, capacity: '8 Personnel' },
+      { id: 'v3', type: 'Emergency Fire Engine', status: 'AVAILABLE', lat: 12.961, lng: 77.582, fuel: 70, capacity: '6 Personnel' },
+      { id: 'v4', type: 'Rapid Rescue Truck', status: 'AVAILABLE', lat: 12.992, lng: 77.618, fuel: 95, capacity: '5 Personnel' }
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        responders,
+        volunteers,
+        vehicles
+      }
+    });
   } catch (error) {
     next(error);
   }

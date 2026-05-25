@@ -1,6 +1,7 @@
 const User = require('../models/User.model');
 const Alert = require('../models/Alert.model');
 const AuditLog = require('../models/AuditLog.model');
+const Volunteer = require('../models/Volunteer.model');
 const admin = require('../config/firebase');
 
 exports.getUsers = async (req, res, next) => {
@@ -171,6 +172,63 @@ exports.getFakeQueue = async (req, res, next) => {
   }
 };
 
+exports.getPersonnel = async (req, res, next) => {
+  try {
+    const ngos = await User.find({ role: 'ngo' });
+    const ndrfUsers = await User.find({ role: 'ndrf' });
+    const volunteerRecords = await Volunteer.find().populate('userId');
+
+    const agencies = ngos.map((ngo, idx) => {
+      const agencyResponders = ndrfUsers.slice(idx * 2, (idx + 1) * 2).map((u, rIdx) => ({
+        id: u._id.toString(),
+        user: { fullName: u.name },
+        status: rIdx % 2 === 0 ? 'DEPLOYED' : 'AVAILABLE'
+      }));
+
+      return {
+        id: ngo._id.toString(),
+        name: ngo.name,
+        type: 'NGO Coordination Unit',
+        contactEmail: ngo.email,
+        responders: agencyResponders
+      };
+    });
+
+    const volunteers = volunteerRecords.map(vol => ({
+      id: vol._id.toString(),
+      user: {
+        fullName: vol.userId?.name || 'Local Volunteer',
+        phoneNumber: vol.userId?.phone || '+919999999999'
+      },
+      skills: vol.skills && vol.skills.length > 0 ? vol.skills : ['First Aid', 'Rescue Support']
+    }));
+
+    if (volunteers.length === 0) {
+      const citizens = await User.find({ role: 'citizen' });
+      citizens.forEach(c => {
+        volunteers.push({
+          id: c._id.toString(),
+          user: {
+            fullName: c.name,
+            phoneNumber: c.phone
+          },
+          skills: ['First Aid', 'Relief Supply Distribution', 'Basic Life Support']
+        });
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        agencies,
+        volunteers
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.confirmFakeAlert = async (req, res, next) => {
   try {
     const alert = await Alert.findById(req.params.id);
@@ -283,6 +341,26 @@ exports.getAuditLogs = async (req, res, next) => {
       page: pageNum,
       pages: Math.ceil(total / limitNum)
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getTeams = async (req, res, next) => {
+  try {
+    const teams = await User.find({ role: { $in: ['ndrf', 'ngo'] } })
+      .select('name phone email role district status');
+    
+    // Map to expected 'teams' structure in frontend
+    const mappedTeams = teams.map(t => ({
+      id: t._id,
+      name: t.name,
+      type: t.role.toUpperCase(),
+      status: t.status || 'AVAILABLE',
+      contact: t.phone
+    }));
+
+    res.json({ success: true, data: mappedTeams });
   } catch (error) {
     next(error);
   }

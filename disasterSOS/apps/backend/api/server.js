@@ -35,6 +35,7 @@ app.use(morgan('dev'));
 // Route Mounts
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/sos', sosRoutes);
+app.use('/api/v1/incidents', sosRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/resources', resourceRoutes);
 app.use('/api/v1/volunteers', volunteerRoutes);
@@ -68,4 +69,23 @@ const server = app.listen(env.PORT, () => {
   console.log(`Server running in production-ready mode on port ${env.PORT}`);
 });
 
-module.exports = { app, server };
+// Initialize Socket.io
+const { Server } = require('socket.io');
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Expose io to routes
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  console.log('New client connected to Socket.IO');
+  socket.on('disconnect', () => {
+    console.log('Client disconnected from Socket.IO');
+  });
+});
+
+module.exports = { app, server, io };
