@@ -17,7 +17,15 @@ export default function SignupPage() {
 
   const handleNext = () => {
     if (step === 1) {
-      if (!formData.name || !formData.email || !formData.password) return toast.error("Please fill all required fields");
+      if (!formData.name || !formData.email || !formData.phone || !formData.password) {
+        return toast.error("Please fill all required fields");
+      }
+      
+      const phoneRegex = /^[6-9]\d{9}$/;
+      if (!phoneRegex.test(formData.phone)) {
+        return toast.error("Please enter a valid 10-digit mobile number");
+      }
+      
       setStep(2);
     } else if (step === 2) {
       if (!formData.district || !formData.state) return toast.error("Please select location");
@@ -39,7 +47,7 @@ export default function SignupPage() {
       const res = await api.post('/auth/register', {
         name: formData.name,
         email: formData.email,
-        phone: formData.phone || `+91${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+        phone: formData.phone,
         password: formData.password,
         role: roleMap[formData.role] || 'citizen',
         district: formData.district || 'Unknown',
@@ -115,6 +123,10 @@ export default function SignupPage() {
                     <input type="email" value={formData.email} onChange={e => updateForm('email', e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-primary/20 outline-none" />
                   </div>
                   <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Mobile Number *</label>
+                    <input type="tel" placeholder="e.g. 9876543210" value={formData.phone} onChange={e => updateForm('phone', e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-primary/20 outline-none" />
+                  </div>
+                  <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Password *</label>
                     <input type="password" value={formData.password} onChange={e => updateForm('password', e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:ring-2 focus:ring-primary/20 outline-none" />
                   </div>
@@ -172,6 +184,7 @@ export default function SignupPage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between"><span className="text-gray-500">Name:</span> <span className="font-bold">{formData.name}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Email:</span> <span className="font-bold">{formData.email}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Mobile:</span> <span className="font-bold">{formData.phone}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Role:</span> <span className="font-bold capitalize">{formData.role}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Location:</span> <span className="font-bold">{formData.district}, {formData.state}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Language:</span> <span className="font-bold">{formData.language}</span></div>

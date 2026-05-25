@@ -1,184 +1,280 @@
-import { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Points, PointMaterial } from '@react-three/drei';
 import * as THREE from 'three';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-// Simplified outline border of India using real latitude and longitude coordinates
-const indiaBorder = [
-  [34.5, 74.5], // Kashmir North
-  [32.5, 76.0], // Himachal
-  [30.0, 78.0], // Uttarakhand
-  [28.0, 81.0], // Nepal border west
-  [27.0, 85.0], // Nepal border east
-  [27.5, 88.5], // Sikkim
-  [27.5, 92.0], // Bhutan
-  [28.5, 96.0], // Arunachal East
-  [25.0, 94.0], // Nagaland/Manipur
-  [23.0, 92.5], // Mizoram
-  [24.0, 91.5], // Tripura
-  [25.5, 90.0], // Meghalaya
-  [22.5, 89.0], // West Bengal / Bangladesh border
-  [20.0, 86.0], // Odisha coast
-  [16.0, 81.0], // Andhra coast
-  [13.0, 80.0], // Chennai coast
-  [10.0, 79.8], // Jaffna strait
-  [8.0, 77.5],  // Kanyakumari
-  [10.0, 76.0], // Kerala coast
-  [13.0, 74.8], // Karnataka coast
-  [16.0, 73.5], // Goa / Maharashtra coast
-  [19.0, 72.8], // Mumbai coast
-  [21.0, 72.0], // Gujarat South
-  [22.5, 69.0], // Gujarat West
-  [24.5, 71.0], // Kutch
-  [26.0, 70.0], // Rajasthan West
-  [28.0, 73.0], // Bikaner
-  [30.0, 74.0], // Punjab
-  [32.5, 74.0]  // Jammu
-];
+// Register GSAP ScrollTrigger plugin
+gsap.registerPlugin(ScrollTrigger);
 
-// Major Indian cities representing critical disaster hotspots
-const criticalCities = [
-  { name: 'Patna', lat: 25.5941, lng: 85.1376 },
-  { name: 'Mumbai', lat: 19.0760, lng: 72.8777 },
-  { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
-  { name: 'Srinagar', lat: 34.0837, lng: 74.7973 },
-  { name: 'Guwahati', lat: 26.1445, lng: 91.7362 },
-  { name: 'Bengaluru', lat: 12.9716, lng: 77.5946 },
-  { name: 'Dehradun', lat: 30.3165, lng: 78.0322 }
-];
+const vertexShader = `
+  uniform float uTime;
+  uniform float uScroll;
+  uniform vec2 uMouse;
 
-// Ray-casting point-in-polygon algorithm
-const isPointInPolygon = (lat, lng, polygon) => {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i][1], yi = polygon[i][0];
-    const xj = polygon[j][1], yj = polygon[j][0];
-    const intersect = ((yi > lat) !== (yj > lat))
-        && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
+  attribute vec3 aRandom;
+
+  varying vec3 vColor;
+  varying float vDepth;
+
+  // Modulo 289
+  vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+  vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+  // Stefan Gustavson's 3D Perlin Noise
+  float snoise(vec3 v) {
+    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+    vec3 i  = floor(v + dot(v, C.yyy));
+    vec3 x0 = v - i + dot(i, C.xxx);
+
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min(g.xyz, l.zxy);
+    vec3 i2 = max(g.xyz, l.zxy);
+
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy * 0.5;
+    vec3 x3 = x0 - D.yyy;
+
+    i = mod289(i);
+    vec4 p = permute(permute(permute(
+               i.z + vec4(0.0, i1.z, i2.z, 1.0))
+             + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+             + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+
+    float n_ = 0.14285714285;
+    vec3 ns = n_ * D.wyz - D.xzx;
+
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_);
+
+    vec4 x = x_ * ns.x + ns.yyyy;
+    vec4 y = y_ * ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+
+    vec4 b0 = vec4(x.xy, y.xy);
+    vec4 b1 = vec4(x.zw, y.zw);
+
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+
+    vec3 p0 = vec3(a0.xy, h.x);
+    vec3 p1 = vec3(a0.zw, h.y);
+    vec3 p2 = vec3(a1.xy, h.z);
+    vec3 p3 = vec3(a1.zw, h.w);
+
+    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+    p0 *= norm.x;
+    p1 *= norm.y;
+    p2 *= norm.z;
+    p3 *= norm.w;
+
+    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
   }
-  return inside;
-};
 
-// Map real lat/lng to 3D normalized coordinates centered around India's geographic center
-const mapLatLngTo3D = (lat, lng, randomizeZ = false) => {
-  const scaleX = 0.12;
-  const scaleY = 0.14;
-  const x = (lng - 78.9629) * scaleX;
-  const y = (lat - 22.5937) * scaleY;
-  const z = randomizeZ ? (Math.random() - 0.5) * 0.05 : 0;
-  return [x, y, z];
-};
+  void main() {
+    vec3 pos = position;
 
-const PulsingCriticalDot = ({ position }) => {
-  const coreRef = useRef();
-  const ringRef = useRef();
+    // Smooth spherical rotation over time
+    float angle = uTime * 0.04;
+    float s = sin(angle);
+    float c = cos(angle);
+    pos.xz = mat2(c, -s, s, c) * pos.xz;
+    pos.xy = mat2(c, -s, s, c) * pos.xy;
 
-  useFrame((state) => {
-    const time = state.clock.getElapsedTime();
+    // Organic fluid Perlin noise trails
+    vec3 noiseInput = pos * 1.0 + vec3(0.0, 0.0, uTime * 0.12);
+    vec3 noiseDisplacement = vec3(
+      snoise(noiseInput),
+      snoise(noiseInput + vec3(12.0, 34.0, 56.0)),
+      snoise(noiseInput + vec3(78.0, 90.0, 23.0))
+    );
+
+    // Multi-directional burst layout
+    vec3 targetPos = pos + (aRandom * 3.8) + (noiseDisplacement * 2.8);
+
+    // Eased blending between sphere and flowing dispersed streams based on scroll progress
+    vec3 finalPos = mix(pos, targetPos, uScroll);
+
+    // Depth-based forward shift on scroll
+    finalPos.z += uScroll * 1.8;
+
+    // Smooth mouse-reactive camera parallax (stronger in initial sphere state)
+    finalPos.x += uMouse.x * 0.35 * (1.0 - uScroll);
+    finalPos.y += uMouse.y * 0.35 * (1.0 - uScroll);
+
+    vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+
+    // Attenuation of glowing size based on depth
+    float baseSize = mix(24.0, 36.0, uScroll);
+    gl_PointSize = baseSize / -mvPosition.z;
+
+    // Dynamic color shifting from alert crimson-red to warnings gold-orange hot embers
+    vec3 startColor = vec3(0.95, 0.12, 0.12);
+    vec3 endColor = vec3(1.0, 0.42, 0.1);
+    vColor = mix(startColor, endColor, uScroll * abs(noiseDisplacement.x));
+
+    vDepth = -mvPosition.z;
+  }
+`;
+
+const fragmentShader = `
+  varying vec3 vColor;
+  varying float vDepth;
+
+  void main() {
+    // Perfect circular glowing embers
+    float dist = distance(gl_PointCoord, vec2(0.5));
+    if (dist > 0.5) discard;
+
+    // Exponential soft center glow
+    float glow = exp(-dist * 5.2);
     
-    // Core pulsing scale and intensity
-    if (coreRef.current) {
-      const coreScale = 1 + Math.sin(time * 6) * 0.15;
-      coreRef.current.scale.set(coreScale, coreScale, coreScale);
+    // Additive fading smooth edges
+    float alpha = smoothstep(0.5, 0.1, dist) * 0.78;
+
+    gl_FragColor = vec4(vColor, glow * alpha);
+  }
+`;
+
+const SphereParticles = ({ scrollObj }) => {
+  const pointsRef = useRef();
+  const materialRef = useRef();
+  
+  // Track mouse movements smoothly
+  const mouseRef = useRef([0, 0]);
+  const lerpedMouseRef = useRef([0, 0]);
+
+  // Graceful degradation: lower count on mobile devices to preserve battery and maintain 60fps
+  const count = useMemo(() => {
+    return window.innerWidth < 768 ? 4000 : 12000;
+  }, []);
+
+  // Compute spherical position and randomized vector paths
+  const [positions, randoms] = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const rand = new Float32Array(count * 3);
+
+    for (let i = 0; i < count; i++) {
+      // 1. Initial coordinates distributed on a sphere
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      
+      // Radius of the sphere in the center
+      const r = 1.0 + Math.random() * 0.15;
+      
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = r * Math.cos(phi);
+
+      // 2. Random explosion vectors for dispersion direction
+      const thetaR = Math.random() * 2.0 * Math.PI;
+      const phiR = Math.acos(Math.random() * 2.0 - 1.0);
+      const speed = 0.6 + Math.random() * 1.4;
+      
+      rand[i * 3] = speed * Math.sin(phiR) * Math.cos(thetaR);
+      rand[i * 3 + 1] = speed * Math.sin(phiR) * Math.sin(thetaR);
+      rand[i * 3 + 2] = speed * Math.cos(phiR);
     }
-    
-    // Ring pulsing expansion and fading opacity
-    if (ringRef.current) {
-      const ringScale = 1 + (time * 1.5) % 2.5;
-      const opacity = Math.max(0, 1 - (ringScale - 1) / 2.5);
-      ringRef.current.scale.set(ringScale, ringScale, ringScale);
-      ringRef.current.material.opacity = opacity * 0.5;
+
+    return [pos, rand];
+  }, [count]);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const x = (e.clientX / window.innerWidth) * 2 - 1;
+      const y = -(e.clientY / window.innerHeight) * 2 + 1;
+      mouseRef.current = [x, y];
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Frame animation loop
+  useFrame((state) => {
+    // Lerp mouse coordinate values smoothly
+    lerpedMouseRef.current[0] += (mouseRef.current[0] - lerpedMouseRef.current[0]) * 0.05;
+    lerpedMouseRef.current[1] += (mouseRef.current[1] - lerpedMouseRef.current[1]) * 0.05;
+
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = state.clock.getElapsedTime();
+      // Directly assign scrubbed GSAP scroll progress
+      materialRef.current.uniforms.uScroll.value = scrollObj.progress;
+      materialRef.current.uniforms.uMouse.value.set(lerpedMouseRef.current[0], lerpedMouseRef.current[1]);
     }
   });
 
   return (
-    <group position={position}>
-      {/* Outer glowing pulsing ring */}
-      <mesh ref={ringRef} rotation={[0, 0, 0]}>
-        <ringGeometry args={[0.03, 0.04, 32]} />
-        <meshBasicMaterial color="#ff2a2a" transparent opacity={0.5} side={THREE.DoubleSide} />
-      </mesh>
-      
-      {/* Inner solid hot core sphere */}
-      <mesh ref={coreRef}>
-        <sphereGeometry args={[0.025, 16, 16]} />
-        <meshBasicMaterial color="#ff2a2a" />
-      </mesh>
-    </group>
-  );
-};
-
-const IndiaMapParticles = () => {
-  const groupRef = useRef();
-
-  // Generate particles inside the shape of India once
-  const positions = useMemo(() => {
-    const count = 3500;
-    const pts = new Float32Array(count * 3);
-    let generated = 0;
-    
-    while (generated < count) {
-      // Generate coordinates around bounding box of India
-      const lat = 8.0 + Math.random() * 27.0;
-      const lng = 68.0 + Math.random() * 29.0;
-      
-      if (isPointInPolygon(lat, lng, indiaBorder)) {
-        const [x, y, z] = mapLatLngTo3D(lat, lng, true);
-        pts[generated * 3] = x;
-        pts[generated * 3 + 1] = y;
-        pts[generated * 3 + 2] = z;
-        generated++;
-      }
-    }
-    return pts;
-  }, []);
-
-  // Soft mouse parallax tilt
-  useFrame((state) => {
-    if (groupRef.current) {
-      const targetX = state.mouse.y * 0.12;
-      const targetY = state.mouse.x * 0.12;
-      
-      // Smooth interpolation (lerp)
-      groupRef.current.rotation.x += (targetX - groupRef.current.rotation.x) * 0.05;
-      groupRef.current.rotation.y += (targetY - groupRef.current.rotation.y) * 0.05;
-    }
-  });
-
-  // Map the static critical cities coordinates to 3D positions
-  const criticalPositions = useMemo(() => {
-    return criticalCities.map(city => mapLatLngTo3D(city.lat, city.lng, false));
-  }, []);
-
-  return (
-    <group ref={groupRef}>
-      {/* Base Point Cloud mapping India */}
-      <Points positions={positions} stride={3} frustumCulled={false}>
-        <PointMaterial
-          transparent
-          color="#ff4a4a"
-          size={0.018}
-          sizeAttenuation={true}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          opacity={0.6}
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positions, 3]}
         />
-      </Points>
-
-      {/* Static Pulsing Hotspot indicators inside India */}
-      {criticalPositions.map((pos, idx) => (
-        <PulsingCriticalDot key={idx} position={pos} />
-      ))}
-    </group>
+        <bufferAttribute
+          attach="attributes-aRandom"
+          args={[randoms, 3]}
+        />
+      </bufferGeometry>
+      <shaderMaterial
+        ref={materialRef}
+        vertexShader={vertexShader}
+        fragmentShader={fragmentShader}
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        uniforms={{
+          uTime: { value: 0 },
+          uScroll: { value: 0 },
+          uMouse: { value: new THREE.Vector2(0, 0) }
+        }}
+      />
+    </points>
   );
 };
 
 export default function ThreeBackground() {
+  const scrollObj = useMemo(() => ({ progress: 0 }), []);
+
+  useEffect(() => {
+    // Setup GSAP ScrollTrigger to track overall viewport scroll progress smoothly
+    const trigger = ScrollTrigger.create({
+      trigger: document.documentElement,
+      start: 'top top',
+      end: 'bottom bottom',
+      scrub: 1.2, // Smooth scrubbing to create elegant easing transitions
+      onUpdate: (self) => {
+        scrollObj.progress = self.progress;
+      }
+    });
+
+    return () => {
+      trigger.kill();
+      // Ensure ScrollTrigger cache is cleared on unmount
+      ScrollTrigger.clearMatchMedia();
+    };
+  }, [scrollObj]);
+
   return (
-    <div className="absolute inset-0 z-0 opacity-40">
-      <Canvas camera={{ position: [0, 0, 3.8] }}>
-        <IndiaMapParticles />
+    <div className="fixed inset-0 z-0 opacity-55 pointer-events-none w-full h-screen">
+      <Canvas camera={{ position: [0, 0, 3.8] }} dpr={[1, 2]}>
+        <SphereParticles scrollObj={scrollObj} />
       </Canvas>
     </div>
   );
