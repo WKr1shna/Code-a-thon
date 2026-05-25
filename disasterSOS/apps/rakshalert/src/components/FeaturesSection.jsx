@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, Map, Globe2, WifiOff, MessageCircle, Tent, Users, TrendingUp, Building2 } from 'lucide-react';
+import { FeaturesBackground } from './ThreeVisuals';
 
 export default function FeaturesSection() {
   const features = [
@@ -52,8 +53,11 @@ export default function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-6">
+    <section id="features" className="py-24 bg-white relative overflow-hidden">
+      {/* 3D AI Network Node Graph Background */}
+      <FeaturesBackground />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
         
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-primary font-black uppercase tracking-widest text-xs mb-3 block">Why RakshAlert is Different</span>

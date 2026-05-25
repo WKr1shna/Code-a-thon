@@ -298,19 +298,27 @@ export default function UserDashboard() {
               
               <div className="grid md:grid-cols-2 gap-6">
                 {[
-                  { icon: Tent, name: 'Govt Relief Shelter (BBMP)', dist: '2.3 km', stat: 'Open · 45 beds left', color: 'text-blue-600 bg-blue-50 border-blue-100' },
-                  { icon: HeartPulse, name: 'Red Cross Medical Camp', dist: '3.1 km', stat: 'First Aid Available', color: 'text-red-600 bg-red-50 border-red-100' },
-                  { icon: Map, name: 'Food Distribution Van', dist: '4.5 km', stat: 'Moving towards area', color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-                  { icon: Shield, name: 'NDRF Base Camp 10', dist: '6.2 km', stat: 'Rescue Boats Available', color: 'text-orange-600 bg-orange-50 border-orange-100' },
+                  { icon: Tent, name: 'Govt Relief Shelter (BBMP)', dist: '2.3 km', stat: 'Open · 45 beds left', color: 'text-blue-600 bg-blue-50 border-blue-100 border-l-blue-500', lat: 12.9716, lng: 77.5946 },
+                  { icon: HeartPulse, name: 'Red Cross Medical Camp', dist: '3.1 km', stat: 'First Aid Available', color: 'text-red-600 bg-red-50 border-red-100 border-l-red-500', lat: 12.9800, lng: 77.6000 },
+                  { icon: Map, name: 'Food Distribution Van', dist: '4.5 km', stat: 'Moving towards area', color: 'text-emerald-600 bg-emerald-50 border-emerald-100 border-l-emerald-500', lat: 12.9650, lng: 77.5850 },
+                  { icon: Shield, name: 'NDRF Base Camp 10', dist: '6.2 km', stat: 'Rescue Boats Available', color: 'text-orange-600 bg-orange-50 border-orange-100 border-l-orange-500', lat: 12.9900, lng: 77.6100 },
                 ].map((r, i) => (
-                  <div key={i} className={`bg-white p-6 rounded-2xl shadow-sm border-2 ${r.color} flex items-center space-x-4 hover:shadow-md transition`}>
-                    <div className={`p-4 rounded-xl bg-white shadow-sm`}><r.icon className="w-8 h-8" /></div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-secondary text-lg">{r.name}</h4>
-                        <span className="text-xs font-black text-gray-500 bg-white px-2 py-1 rounded-md shadow-sm">{r.dist}</span>
+                  <div 
+                    key={i} 
+                    onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`, '_blank')}
+                    className={`bg-white p-6 rounded-2xl shadow-sm border-2 border-l-4 cursor-pointer hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 ${r.color} flex items-center space-x-4`}
+                    title="Click to open location in Google Maps"
+                  >
+                    <div className="p-4 rounded-xl bg-white shadow-sm shrink-0"><r.icon className="w-8 h-8" /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <h4 className="font-bold text-secondary text-lg truncate">{r.name}</h4>
+                        <span className="text-xs font-black text-gray-500 bg-white px-2 py-1 rounded-md shadow-sm shrink-0">{r.dist}</span>
                       </div>
                       <p className="text-sm font-medium opacity-80 mt-1">{r.stat}</p>
+                      <div className="mt-3 text-xs font-bold uppercase tracking-wider flex items-center space-x-1 opacity-70 hover:opacity-100 transition-opacity">
+                        <span>📍 View on Google Maps</span>
+                      </div>
                     </div>
                   </div>
                 ))}

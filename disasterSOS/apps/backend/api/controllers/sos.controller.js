@@ -338,7 +338,7 @@ exports.getAvailableResources = async (req, res, next) => {
     // 2. Fetch available Volunteers
     const volunteerRecords = await Volunteer.find({ status: 'available' }).populate('userId');
     let volunteers = volunteerRecords.map(v => ({
-      id: v._id.toString(),
+      id: v.userId?._id?.toString() || v._id.toString(),
       name: v.userId?.name || 'Volunteer',
       phone: v.userId?.phone || '+919999999999',
       skills: v.skills && v.skills.length > 0 ? v.skills : ['Rescue Ops', 'First Aid'],

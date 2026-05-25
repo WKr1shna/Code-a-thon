@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Globe, WifiOff, BellRing } from 'lucide-react';
+import { AppDownload3D } from './ThreeVisuals';
 
 export default function AppDownloadSection() {
   const features = [
@@ -56,54 +57,15 @@ export default function AppDownloadSection() {
             </div>
           </motion.div>
 
-          {/* Right: Dual Phone Mockup (CSS Only) */}
+          {/* Right: Rotating 3D Phone with Pulsing Signal Waves */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="relative h-[600px] hidden sm:block"
+            className="hidden lg:block relative z-10"
           >
-            {/* Back Phone (Map) */}
-            <div className="absolute right-0 top-10 w-[280px] h-[580px] bg-secondary border-[8px] border-gray-800 rounded-[3rem] shadow-2xl rotate-6 opacity-60">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-800 rounded-b-2xl z-20"></div>
-              <div className="w-full h-full bg-gray-100 rounded-[2rem] overflow-hidden p-2">
-                <div className="w-full h-full bg-[url('https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png')] bg-cover opacity-30"></div>
-              </div>
-            </div>
-
-            {/* Front Phone (SOS Report) */}
-            <div className="absolute left-10 top-0 w-[300px] h-[600px] bg-white border-[8px] border-gray-900 rounded-[3rem] shadow-2xl z-10 flex flex-col">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-900 rounded-b-2xl z-20"></div>
-              
-              <div className="flex-1 bg-background rounded-[2rem] overflow-hidden flex flex-col">
-                <div className="bg-primary text-white pt-12 pb-6 px-6 text-center shadow-md">
-                  <h3 className="font-black text-2xl uppercase tracking-widest">SOS Panic</h3>
-                  <p className="text-xs opacity-80 mt-1">Hold to broadcast location</p>
-                </div>
-                
-                <div className="flex-1 flex flex-col items-center justify-center p-6">
-                  {/* Big SOS Button */}
-                  <div className="w-40 h-40 bg-red-100 rounded-full flex items-center justify-center mb-8 relative">
-                    <div className="absolute inset-0 border-4 border-red-200 rounded-full animate-ping-slow"></div>
-                    <button className="w-32 h-32 bg-primary rounded-full shadow-2xl flex items-center justify-center text-white font-black text-3xl shadow-red-500/50 hover:scale-95 transition-transform">
-                      SOS
-                    </button>
-                  </div>
-                  
-                  <div className="w-full space-y-3">
-                    <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">🌊</div>
-                      <span className="font-bold text-secondary text-sm">Flood Emergency</span>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">🔥</div>
-                      <span className="font-bold text-secondary text-sm">Fire Breakout</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AppDownload3D />
           </motion.div>
 
         </div>
