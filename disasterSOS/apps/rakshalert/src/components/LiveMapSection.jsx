@@ -1,12 +1,85 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { motion } from 'framer-motion';
 import { AlertCircle, MapPin, Activity, Users } from 'lucide-react';
 import SeverityLegend from './SeverityLegend';
 import { mockAlerts } from '../data/mockAlerts';
+import api from '../services/api';
+import { io } from 'socket.io-client';
+import { LiveMapScanner } from './ThreeVisuals';
 
 export default function LiveMapSection() {
-  
+  const [alerts, setAlerts] = useState(mockAlerts);
+  const [stats, setStats] = useState({
+    active: 47,
+    states: 12,
+    critical: 8,
+    responders: 230
+  });
+
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const response = await api.get('/sos/nearby?lat=22.5937&lng=78.9629&radius=5000');
+        if (response.data.success && response.data.data.length > 0) {
+          const realAlerts = response.data.data.map(a => ({
+            id: a._id,
+            title: a.title,
+            type: a.type,
+            severity: a.severity || 'HIGH',
+            lat: a.location.coordinates[1],
+            lng: a.location.coordinates[0],
+            district: a.district || 'Verified Area',
+            state: a.state || '',
+            reportedAt: new Date(a.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            description: a.description
+          }));
+          setAlerts(realAlerts);
+          
+          setStats(prev => ({
+            ...prev,
+            active: realAlerts.length,
+            critical: realAlerts.filter(a => a.severity === 'CRITICAL').length
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch real-time map data:', err);
+      }
+    };
+
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 60000);
+
+    const socket = io('http://localhost:5001');
+    socket.on('sos_update', (updatedAlert) => {
+      setAlerts(prev => {
+        const mapped = {
+          id: updatedAlert._id,
+          title: updatedAlert.title,
+          type: updatedAlert.type,
+          severity: updatedAlert.severity || 'HIGH',
+          lat: updatedAlert.location.coordinates[1],
+          lng: updatedAlert.location.coordinates[0],
+          district: updatedAlert.district || 'Verified Area',
+          state: updatedAlert.state || '',
+          reportedAt: new Date(updatedAlert.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          description: updatedAlert.description
+        };
+        const exists = prev.find(a => a.id === updatedAlert._id);
+        if (exists) {
+          return prev.map(a => a.id === updatedAlert._id ? mapped : a);
+        } else {
+          return [mapped, ...prev];
+        }
+      });
+    });
+
+    return () => {
+      clearInterval(interval);
+      socket.disconnect();
+    };
+  }, []);
+
   const getSeverityStyle = (severity) => {
     switch(severity) {
       case 'NORMAL': return { color: '#2DC653', radius: 6, pulse: false };
@@ -24,8 +97,9 @@ export default function LiveMapSection() {
         
         {/* Header */}
         <div className="mb-10">
-          <div className="flex items-center space-x-2 mb-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse-fast"></span>
+          <div className="flex items-center space-x-3 mb-3">
+            {/* 3D Scanner Radar Wave */}
+            <LiveMapScanner />
             <span className="text-primary font-black uppercase tracking-widest text-xs">Live Monitoring</span>
           </div>
           <h2 className="text-4xl font-black text-secondary tracking-tight mb-4">
@@ -55,7 +129,7 @@ export default function LiveMapSection() {
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
             
-            {mockAlerts.map(alert => {
+            {alerts.map(alert => {
               const style = getSeverityStyle(alert.severity);
               return (
                 <CircleMarker
@@ -77,7 +151,7 @@ export default function LiveMapSection() {
                           {alert.severity}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2 font-medium">📍 {alert.district}, {alert.state}</p>
+                      <p className="text-xs text-gray-500 mb-2 font-medium">📍 {alert.district}{alert.state ? `, ${alert.state}` : ''}</p>
                       <p className="text-sm text-gray-700 mb-3">{alert.description}</p>
                       <div className="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-lg text-center font-semibold uppercase tracking-wider">
                         Reported {alert.reportedAt}
@@ -96,10 +170,10 @@ export default function LiveMapSection() {
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-10">
           {[
-            { icon: AlertCircle, label: 'Active Incidents', value: '47', color: 'text-primary' },
-            { icon: MapPin, label: 'States Affected', value: '12', color: 'text-accent' },
-            { icon: Activity, label: 'Critical Zones', value: '8', color: 'text-red-900' },
-            { icon: Users, label: 'Responders Deployed', value: '230', color: 'text-success' }
+            { icon: AlertCircle, label: 'Active Incidents', value: stats.active, color: 'text-primary' },
+            { icon: MapPin, label: 'States Affected', value: stats.states, color: 'text-accent' },
+            { icon: Activity, label: 'Critical Zones', value: stats.critical, color: 'text-red-900' },
+            { icon: Users, label: 'Responders Deployed', value: stats.responders, color: 'text-success' }
           ].map((stat, i) => (
             <motion.div 
               key={i}

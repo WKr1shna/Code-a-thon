@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { AlertOctagon, ShieldCheck } from 'lucide-react';
+import { ProblemsSolvedBackground } from './ThreeVisuals';
 
 export default function ProblemsSolvedSection() {
   const pairs = [
@@ -19,8 +20,11 @@ export default function ProblemsSolvedSection() {
   ];
 
   return (
-    <section id="impact" className="py-24 bg-secondary">
-      <div className="max-w-7xl mx-auto px-6">
+    <section id="impact" className="py-24 bg-secondary relative overflow-hidden">
+      {/* 3D Flowing Turbulent Disaster Wave Field */}
+      <ProblemsSolvedBackground />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
         
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="inline-block bg-primary text-white font-bold uppercase tracking-widest text-xs px-4 py-1.5 rounded-full mb-4">

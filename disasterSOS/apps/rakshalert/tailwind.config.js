@@ -38,8 +38,8 @@ export default {
       },
       keyframes: {
         'pulse-critical': {
-          '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-          '50%': { opacity: .7, transform: 'scale(1.15)' },
+          '0%, 100%': { opacity: 1 },
+          '50%': { opacity: 0.4 },
         }
       }
     },
