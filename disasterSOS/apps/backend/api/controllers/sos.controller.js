@@ -25,15 +25,36 @@ exports.reportAlert = async (req, res, next) => {
 
     await alert.save();
 
-    // Fire and forget verification call to the FastAPI AI service
-    axios.post(`${env.AI_SERVICE_URL}/verify`, {
-      alertId: alert._id,
-      text: alert.description,
-      location: {
-        lat: parseFloat(location.lat),
-        lng: parseFloat(location.lng)
+    // Verification call to the FastAPI AI service
+    try {
+      const aiResponse = await axios.post(`${env.AI_SERVICE_URL}/ai/verify`, {
+        alertId: alert._id,
+        text: alert.description,
+        location: {
+          lat: parseFloat(location.lat),
+          lng: parseFloat(location.lng)
+        }
+      });
+      
+      if (aiResponse.data) {
+        // AI score is confidence of being real (1 - spam_score)
+        const confidenceScore = aiResponse.data.spam_score !== undefined 
+          ? 1 - aiResponse.data.spam_score 
+          : 0.98;
+          
+        alert.aiScore = confidenceScore;
+        
+        if (aiResponse.data.verified) {
+          alert.status = 'active';
+        }
+        await alert.save();
       }
-    }).catch(err => console.error('AI Service verify triggering failed:', err.message));
+    } catch (err) {
+      console.error('AI Service verify triggering failed:', err.message);
+    }
+
+    // Emit real-time event to all connected clients
+    req.app.locals.io.emit('new_sos_alert', alert);
 
     res.status(201).json({
       success: true,
@@ -216,6 +237,9 @@ exports.updateAlertStatus = async (req, res, next) => {
         console.error('FCM broadcast for alert verification failed:', fcmErr.message);
       }
     }
+
+    // Emit status update to clients
+    req.app.locals.io.emit('alert_status_update', alert);
 
     res.json({ success: true, data: alert });
   } catch (error) {

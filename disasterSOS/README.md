@@ -1,8 +1,35 @@
-# Disaster Response Coordination & Community Safety Alert Platform
+# 🚨 Disaster SOS: Real-Time AI Emergency Response Platform
 
-A production-ready platform designed to coordinate relief, track first responder units (NDRF/NGOs), and broadcast high-priority safety alerts to citizens during natural crises.
+**Disaster SOS** is an AI-powered, real-time crisis management platform designed to bridge the gap between citizens in distress and emergency responders (NDRF, NGOs). By leveraging artificial intelligence to filter out spam and WebSockets for instant data delivery, the platform ensures that critical, life-saving information reaches the right people instantly.
 
-## Project Structure
+---
+
+## 🌊 Full Project Flow
+
+The core workflow of Disaster SOS is designed for maximum speed and accuracy during a crisis:
+
+1. **Citizen Distress Signal**: A user facing an emergency (e.g., Flood, Earthquake) logs into the **Citizen Portal**. 
+2. **GPS Lock**: The user clicks **"📍 Fetch GPS"** which immediately hooks into the browser's Geolocation API to lock onto their precise real-world coordinates. They describe the emergency and hit submit.
+3. **AI Spam Filtering (Groq Llama 3.1)**: The Node.js API intercepts the SOS report and forwards the raw text to our Python FastAPI microservice. The lightning-fast **Llama 3.1 model (via Groq API)** performs NLP classification to determine if the report is a genuine emergency or malicious panic-inducing spam/fake news.
+4. **WebSocket Broadcast**: 
+   - If **Genuine**: The AI verifies the alert, upgrading it to `active` status. The Node.js server instantly broadcasts this via **Socket.io** to all connected clients.
+   - If **Fake/Spam**: The alert is suppressed, flagged as `pending`, and quietly routed to the Admin's Fake Review Queue.
+5. **Real-Time Mapping**: Without needing a page refresh, the newly verified emergency instantly drops a pulsing red marker on the **Leaflet GIS Map** across all Citizen and Responder dashboards globally.
+6. **Responder Dispatch**: NDRF or NGO personnel open their tactical dashboards, view the active alert, and click **"Claim Task"** to assign their unit to the rescue, preventing duplicated rescue efforts.
+7. **Multilingual Safety**: While waiting for rescue, the citizen can access AI-generated safety guidelines on their dashboard instantly translated into English, Hindi, or Tamil.
+
+---
+
+## 🛠️ Core Tech Stack
+
+* **Frontend UI**: Next.js 14, React, Tailwind CSS, React-Leaflet (Interactive GIS Mapping).
+* **Primary Backend**: Node.js, Express, MongoDB (Mongoose with `2dsphere` GeoJSON spatial indexing).
+* **Real-Time Engine**: Socket.io for instantaneous, bi-directional event emission.
+* **AI Microservice**: Python, FastAPI, and the **Groq API (Llama-3.1-8b-instant)** for NLP classification.
+
+---
+
+## 📁 Project Structure
 
 ```text
 disasterSOS/
@@ -11,8 +38,8 @@ disasterSOS/
 │   ├── admin/               # Standalone National Analytics Portal
 │   ├── mobile/              # Kotlin Android Application
 │   └── backend/             
-│       ├── api/             # Node.js + Express REST API
-│       └── ai-engine/       # Python FastAPI AI Pipeline
+│       ├── api/             # Node.js + Express REST API (Socket.io)
+│       └── ai-engine/       # Python FastAPI AI Pipeline (Groq SDK)
 ├── packages/
 │   ├── ui/                  # Shared UI components
 │   ├── types/               # Shared TypeScript schemas
@@ -24,7 +51,7 @@ disasterSOS/
 
 ---
 
-## 🛠️ Step-by-Step Device Setup Guide
+## 💻 Step-by-Step Device Setup Guide
 
 Follow these steps to run this project on any development machine.
 
@@ -36,24 +63,12 @@ Ensure you have the following installed on your target device:
 
 ---
 
-### 2. Automatic One-Click Setup (macOS / Linux)
-We provide an automated setup script that configures environment files and installs all dependencies across subfolders.
-
-At the root directory (`disasterSOS/`), run:
-```bash
-./setup.sh
-```
-
----
-
-### 3. Manual Installation Steps (All Platforms)
-
-If you are on Windows or prefer installing manually:
+### 2. Manual Installation Steps
 
 #### A. Setup Environment Files
 Create a copy of `.env.example` in the backend root folder:
 - Copy `/apps/backend/api/.env.example` to `/apps/backend/.env`
-- Open `/apps/backend/.env` and review variables (e.g. adjust ports or Twilio placeholders).
+- Ensure you append your **Groq API Key** to the `.env` file: `GROQ_API_KEY=your_key_here`
 
 #### B. Install Sub-Project Dependencies
 Run `npm install` inside each application directory:
@@ -70,7 +85,7 @@ npm install
 
 ---
 
-### 4. 🗄️ Database Seeding
+### 3. 🗄️ Database Seeding
 To log in immediately with role guards configured (Admin, NGO, NDRF, Citizen), run the database seeder to populate mock accounts:
 
 ```bash
@@ -86,31 +101,32 @@ This populates the following test logins (Password: `password123`):
 
 ---
 
-### 5. 🚀 Starting the Application Servers
+### 4. 🚀 Starting the Application Servers
 
 Start MongoDB locally on your device, then spin up the development servers:
 
-#### A. Run Node.js REST API
+#### A. Run Node.js REST API (and WebSockets)
 ```bash
 cd apps/backend/api
 npm run dev
 ```
 *Runs backend listener on: `http://localhost:5001`*
 
-#### B. Run Next.js Web App
+#### B. Run Python AI Engine (Groq Llama 3.1)
+Create a Python virtual environment and run the FastAPI server:
+```bash
+cd apps/backend/ai-engine
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+set -a && source ../../.env && set +a
+uvicorn app.main:app --port 8000 --host 0.0.0.0
+```
+*Runs AI classification pipelines on: `http://localhost:8000`*
+
+#### C. Run Next.js Web App
 ```bash
 cd apps/web
 npm run dev
 ```
 *Runs Next.js client on: `http://localhost:3000`*
-
-#### C. Run Python AI Engine (Optional)
-Create a Python virtual environment and run the FastAPI server:
-```bash
-cd apps/backend/ai-engine
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --port 8000 --reload
-```
-*Runs AI classification pipelines on: `http://localhost:8000`*

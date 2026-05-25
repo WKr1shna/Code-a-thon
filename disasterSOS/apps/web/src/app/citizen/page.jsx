@@ -42,6 +42,27 @@ export default function CitizenPortal() {
     }
   };
 
+  const handleGetLocation = (e) => {
+    e.preventDefault();
+    if (!navigator.geolocation) {
+      setFeedbackMsg({ text: 'Geolocation is not supported by your browser.', isError: true });
+      return;
+    }
+    
+    setFeedbackMsg({ text: 'Fetching GPS coordinates...', isError: false });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLat(position.coords.latitude.toFixed(6));
+        setLng(position.coords.longitude.toFixed(6));
+        setFeedbackMsg({ text: 'GPS Location successfully acquired!', isError: false });
+      },
+      (error) => {
+        setFeedbackMsg({ text: `GPS Error: ${error.message}`, isError: true });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const handleSOSSubmit = async (e) => {
     e.preventDefault();
     setIsReporting(true);
@@ -166,28 +187,22 @@ export default function CitizenPortal() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1.5 tracking-wider">Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={lat}
-                      onChange={(e) => setLat(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-950/80 border border-slate-800 text-slate-100 text-sm rounded-xl outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1.5 tracking-wider">Longitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={lng}
-                      onChange={(e) => setLng(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-950/80 border border-slate-800 text-slate-100 text-sm rounded-xl outline-none"
-                    />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 bg-slate-950/80 border border-slate-800 rounded-xl">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Incident Location</label>
+                      <span className="text-xs text-slate-300 font-mono">
+                        {lat}, {lng}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={handleGetLocation} 
+                      type="button"
+                      className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-1.5 rounded border border-slate-700 shadow transition flex items-center space-x-1.5"
+                    >
+                      <span>📍</span>
+                      <span>Fetch GPS</span>
+                    </button>
                   </div>
                 </div>
 

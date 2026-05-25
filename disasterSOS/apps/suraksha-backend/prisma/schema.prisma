@@ -1,0 +1,311 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ======================= ENUMS =======================
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  COORDINATOR
+  RESPONDER
+  VOLUNTEER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  PENDING
+  VERIFIED
+  ACTIVE
+  RESOLVED
+  FAKE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ResourceType {
+  MEDICAL
+  FOOD
+  WATER
+  EQUIPMENT
+  SHELTER
+}
+
+enum BroadcastType {
+  SMS
+  WHATSAPP
+  PUSH
+  AIR_TEXT
+}
+
+enum VolunteerSkill {
+  MEDICAL
+  RESCUE
+  LOGISTICS
+  COMMUNICATION
+  GENERAL
+}
+
+// ======================= MODELS =======================
+
+model User {
+  id                   String     @id @default(uuid())
+  fullName             String
+  email                String     @unique
+  phoneNumber          String     @unique
+  passwordHash         String
+  organization         String?
+  role                 Role       @default(VOLUNTEER)
+  
+  // Security & Auth
+  refreshToken         String?
+  failedLoginAttempts  Int        @default(0)
+  isLocked             Boolean    @default(false)
+  lockUntil            DateTime?
+  fcmTokens            String[]
+  
+  // Timestamps
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  isDeleted            Boolean    @default(false)
+
+  // Relations
+  incidentsReported    Incident[]    @relation("Reporter")
+  tasksAssigned        Task[]        @relation("Assignee")
+  broadcastsSent       Broadcast[]   @relation("Sender")
+  auditLogs            AuditLog[]
+  responderProfile     Responder?
+  volunteerProfile     Volunteer?
+  liveLocations        LiveResponderLocation[]
+}
+
+model Agency {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  type        String      // e.g., "NDRF", "SDRF", "NGO"
+  contactEmail String?
+  contactPhone String?
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  isDeleted   Boolean     @default(false)
+
+  responders  Responder[]
+}
+
+model Responder {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  agencyId    String
+  status      String   @default("AVAILABLE") // AVAILABLE, DEPLOYED, OFF_DUTY
+  lat         Float?
+  lng         Float?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  assignments SOSAssignment[]
+}
+
+model Volunteer {
+  id          String          @id @default(uuid())
+  userId      String          @unique
+  skills      VolunteerSkill[]
+  isAvailable Boolean         @default(true)
+  lat         Float?
+  lng         Float?
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments SOSAssignment[]
+}
+
+model Incident {
+  id             String         @id @default(uuid())
+  title          String
+  description    String
+  type           String         // e.g., "Flood", "Fire"
+  severity       Severity       @default(MEDIUM)
+  status         IncidentStatus @default(PENDING)
+  dispatchStatus DispatchStatus @default(UNASSIGNED)
+  lat            Float
+  lng            Float
+  aiConfidence   Float?         // NLP confidence score
+  
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  isDeleted      Boolean        @default(false)
+
+  reporter       User           @relation("Reporter", fields: [createdById], references: [id])
+  tasks          Task[]
+  aiInstructions AiInstruction[]
+  assignments    SOSAssignment[]
+  dispatchQueue  DispatchQueue?
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  eta         DateTime?
+  
+  incidentId  String
+  assigneeId  String?
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  isDeleted   Boolean    @default(false)
+
+  incident    Incident   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  assignee    User?      @relation("Assignee", fields: [assigneeId], references: [id])
+}
+
+model Shelter {
+  id          String   @id @default(uuid())
+  name        String
+  lat         Float
+  lng         Float
+  capacity    Int
+  currentOccupancy Int @default(0)
+  contactName String?
+  contactPhone String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+}
+
+model Resource {
+  id          String       @id @default(uuid())
+  name        String
+  type        ResourceType
+  quantity    Int          @default(0)
+  minThreshold Int         @default(10) // Low stock alert trigger
+  lat         Float?
+  lng         Float?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  isDeleted   Boolean      @default(false)
+}
+
+model Broadcast {
+  id              String        @id @default(uuid())
+  title           String
+  body            String
+  type            BroadcastType
+  recipientsCount Int           @default(0)
+  
+  sentById        String
+  createdAt       DateTime      @default(now())
+
+  sender          User          @relation("Sender", fields: [sentById], references: [id])
+}
+
+model AiInstruction {
+  id          String   @id @default(uuid())
+  incidentId  String
+  language    String   @default("English")
+  content     String   // The text returned by Claude Anthropic
+  
+  createdAt   DateTime @default(now())
+
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  details     Json?
+  performedById String
+  
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [performedById], references: [id])
+}
+
+enum DispatchStatus {
+  UNASSIGNED
+  ASSIGNED
+  EN_ROUTE
+  ON_SCENE
+  RESOLVED
+  ESCALATED
+}
+
+model Analytics {
+  id              String   @id @default(uuid())
+  date            DateTime @unique @default(dbgenerated("CURRENT_DATE"))
+  totalIncidents  Int      @default(0)
+  avgResponseTime Float    @default(0.0) // In minutes
+  resourcesUsed   Int      @default(0)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model RescueVehicle {
+  id          String   @id @default(uuid())
+  type        String   // "Ambulance", "Fire Truck", "Rescue Boat"
+  capacity    Int      @default(0)
+  fuelLevel   Float    @default(100.0)
+  lat         Float?
+  lng         Float?
+  status      String   @default("AVAILABLE") // AVAILABLE, DEPLOYED, MAINTENANCE
+  
+  assignments SOSAssignment[]
+}
+
+model SOSAssignment {
+  id              String   @id @default(uuid())
+  incidentId      String
+  
+  responderId     String?
+  volunteerId     String?
+  vehicleId       String?
+  
+  status          String   @default("ASSIGNED") // ASSIGNED, EN_ROUTE, ON_SCENE, COMPLETED, CANCELLED
+  estimatedDuration Int?   // in minutes
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  incident        Incident @relation(fields: [incidentId], references: [id])
+  responder       Responder? @relation(fields: [responderId], references: [id])
+  volunteer       Volunteer? @relation(fields: [volunteerId], references: [id])
+  vehicle         RescueVehicle? @relation(fields: [vehicleId], references: [id])
+}
+
+model LiveResponderLocation {
+  id          String   @id @default(uuid())
+  userId      String
+  lat         Float
+  lng         Float
+  timestamp   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DispatchQueue {
+  id            String   @id @default(uuid())
+  incidentId    String   @unique
+  priorityScore Float    @default(0.0)
+  addedAt       DateTime @default(now())
+  
+  incident      Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+}
