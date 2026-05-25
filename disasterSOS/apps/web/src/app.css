@@ -8,12 +8,3 @@ body {
   color: #f3f4f6;
   font-family: 'Inter', sans-serif;
 }
-
-/* Map Dark Theme styling */
-.map-tiles {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-}
-.leaflet-container {
-  background: #020617; /* slate-950 */
-  z-index: 0;
-}

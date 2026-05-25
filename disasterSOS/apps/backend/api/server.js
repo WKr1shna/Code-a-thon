@@ -2,8 +2,6 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
-const http = require('http');
-const { Server } = require('socket.io');
 
 const env = require('./config/env');
 const connectDB = require('./config/db');
@@ -65,29 +63,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Setup HTTP Server & Socket.io
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
-  }
-});
-
-// Make socket.io available to routes/controllers
-app.locals.io = io;
-
-io.on('connection', (socket) => {
-  console.log(`[Socket] New connection established: ${socket.id}`);
-  
-  socket.on('disconnect', () => {
-    console.log(`[Socket] Client disconnected: ${socket.id}`);
-  });
-});
-
 // Start listening
-server.listen(env.PORT, () => {
+const server = app.listen(env.PORT, () => {
   console.log(`Server running in production-ready mode on port ${env.PORT}`);
 });
 
-module.exports = { app, server, io };
+module.exports = { app, server };
