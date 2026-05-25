@@ -16,6 +16,7 @@ router.patch('/:id/status', protect, requireRole('admin', 'ngo', 'ndrf'), sosCon
 router.patch('/:id/severity', protect, requireRole('admin', 'ndrf'), sosController.updateAlertSeverity);
 router.post('/:id/media', protect, sosController.addAlertMedia);
 router.post('/:id/assign', protect, requireRole('admin', 'ngo', 'ndrf'), sosController.assignAlert);
+router.post('/:id/ai-recommendation', protect, sosController.getAiRecommendation);
 router.delete('/:id', protect, requireRole('admin'), sosController.deleteAlert);
 
 module.exports = router;

@@ -9,6 +9,8 @@ import SignupPage from './pages/SignupPage';
 import UserDashboard from './pages/UserDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import SOSAssignmentCenter from './pages/SOSAssignmentCenter';
+import ResponderLoginPage from './pages/ResponderLoginPage';
+import ResponderPortal from './pages/ResponderPortal';
 
 function App() {
   return (
@@ -19,6 +21,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/responder-login" element={<ResponderLoginPage />} />
           
           <Route 
             path="/dashboard" 
@@ -43,6 +46,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN', 'COORDINATOR']}>
                 <SOSAssignmentCenter />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route 
+            path="/responder-portal" 
+            element={
+              <ProtectedRoute allowedRoles={['COORDINATOR', 'RESPONDER']}>
+                <ResponderPortal />
               </ProtectedRoute>
             } 
           />

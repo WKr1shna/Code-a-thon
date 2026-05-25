@@ -26,8 +26,8 @@ exports.reportAlert = async (req, res, next) => {
 
     await alert.save();
 
-    // Fire and forget verification call to the FastAPI AI service
-    axios.post(`${env.AI_SERVICE_URL}/verify`, {
+    // Fire and forget verification call to the FastAPI AI service (using correct /ai/verify prefix)
+    axios.post(`${env.AI_SERVICE_URL}/ai/verify`, {
       alertId: alert._id,
       text: alert.description,
       location: {
@@ -36,9 +36,20 @@ exports.reportAlert = async (req, res, next) => {
       }
     }).catch(err => console.error('AI Service verify triggering failed:', err.message));
 
+    // Fetch and populate alert so it matches socket event contract
+    const populatedAlert = await Alert.findById(alert._id)
+      .populate('reportedBy', 'name phone email role')
+      .populate('claimedBy', 'name phone role');
+
+    // Emit live update to synchronize the map on the landing page immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('sos_update', populatedAlert || alert);
+    }
+
     res.status(201).json({
       success: true,
-      data: alert
+      data: populatedAlert || alert
     });
   } catch (error) {
     next(error);
@@ -94,9 +105,9 @@ exports.getNearbyAlerts = async (req, res, next) => {
 
     const radiusInMeters = parseFloat(radius) * 1000;
 
-    // Find verified or active alerts near spatial index
+    // Find pending, verified or active alerts near spatial index to synchronize newly reported citizen alerts
     const alerts = await Alert.find({
-      status: { $in: ['verified', 'active'] },
+      status: { $in: ['pending', 'verified', 'active'] },
       location: {
         $nearSphere: {
           $geometry: {
@@ -182,6 +193,17 @@ exports.updateAlertStatus = async (req, res, next) => {
     alert.status = statusLower;
     await alert.save();
 
+    // Fetch and populate updated alert for socket notification
+    const populatedAlert = await Alert.findById(alert._id)
+      .populate('reportedBy', 'name phone email role')
+      .populate('claimedBy', 'name phone role');
+
+    // Emit live update to sync landing page maps
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('sos_update', populatedAlert || alert);
+    }
+
     // If verified, trigger FCM broadcast to nearby citizens
     if (status === 'verified') {
       try {
@@ -240,7 +262,18 @@ exports.updateAlertSeverity = async (req, res, next) => {
     alert.severity = severity;
     await alert.save();
 
-    res.json({ success: true, data: alert });
+    // Fetch and populate updated alert for socket notification
+    const populatedAlert = await Alert.findById(alert._id)
+      .populate('reportedBy', 'name phone email role')
+      .populate('claimedBy', 'name phone role');
+
+    // Emit live update to sync landing page maps
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('sos_update', populatedAlert || alert);
+    }
+
+    res.json({ success: true, data: populatedAlert || alert });
   } catch (error) {
     next(error);
   }
@@ -371,6 +404,46 @@ exports.getAvailableResources = async (req, res, next) => {
         responders,
         volunteers,
         vehicles
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// AI dispatch recommendations mapping based on disaster vector characteristics
+exports.getAiRecommendation = async (req, res, next) => {
+  try {
+    const alert = await Alert.findById(req.params.id);
+    if (!alert) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+
+    let recommendation = "";
+    switch (alert.type) {
+      case 'flood':
+        recommendation = `🌊 AI DISPATCH RECOMMENDATION: Critical flooding reported. Deploy NDRF marine rescue unit with inflatable motorized rescue boats. NGO volunteers should immediately establish a food and clean water relief depot within 3km for immediate community support.`;
+        break;
+      case 'earthquake':
+        recommendation = `🧱 AI DISPATCH RECOMMENDATION: Severe structural collapse risk. Deploy NDRF urban search & rescue (USAR) team equipped with concrete cutters and acoustic detection cameras. Establish NGO medical triages nearby.`;
+        break;
+      case 'fire':
+        recommendation = `🔥 AI DISPATCH RECOMMENDATION: Extreme thermal outbreak. Dispatch 3 primary fire engines. Coordinate with NGO volunteers to establish a safe boundary perimeter and provide rapid smoke inhalation first aid.`;
+        break;
+      case 'landslide':
+        recommendation = `⛰️ AI DISPATCH RECOMMENDATION: Heavy landslide blockage. Deploy NDRF debris clearance machinery. NGO units should inspect adjacent lower settlements for structural damage.`;
+        break;
+      case 'urban':
+        recommendation = `🏢 AI DISPATCH RECOMMENDATION: Extreme urban crisis or flash flooding. Coordinate with local municipal water pump assets. Deploy NGO rescue responders to assist stranded motorists and check localized power line hazards.`;
+        break;
+      default:
+        recommendation = `🚨 AI DISPATCH RECOMMENDATION: General emergency alert. Dispatch nearest NGO response unit to verify on-site conditions and request custom logistics and emergency resources.`;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        recommendation
       }
     });
   } catch (error) {

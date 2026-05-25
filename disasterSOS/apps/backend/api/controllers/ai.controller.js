@@ -10,8 +10,8 @@ exports.verifyAlert = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Alert not found' });
     }
 
-    // Call FastAPI service to verify spam
-    const response = await axios.post(`${env.AI_SERVICE_URL}/verify`, {
+    // Call FastAPI service to verify spam (using correct /ai/verify prefix)
+    const response = await axios.post(`${env.AI_SERVICE_URL}/ai/verify`, {
       alertId: alert._id,
       text: alert.description,
       location: {
@@ -20,17 +20,30 @@ exports.verifyAlert = async (req, res, next) => {
       }
     });
 
-    const { score, breakdown } = response.data;
+    const rawScore = response.data.score !== undefined ? response.data.score : (response.data.spam_score !== undefined ? (1 - response.data.spam_score) : 0.85);
+    const score = parseFloat(rawScore);
+    const breakdown = response.data.breakdown || { verified: response.data.verified };
     alert.aiScore = score;
     alert.aiBreakdown = breakdown || {};
 
     if (score > 0.7) {
       alert.status = 'verified';
     } else if (score < 0.4) {
-      // tagged in fake queue, keep status pending but flagged by low score
+      alert.status = 'fake';
     }
 
     await alert.save();
+
+    // Fetch and populate alert so it matches socket event contract
+    const populatedAlert = await Alert.findById(alert._id)
+      .populate('reportedBy', 'name phone email role')
+      .populate('claimedBy', 'name phone role');
+
+    // Emit live update to synchronize the map on the landing page immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('sos_update', populatedAlert || alert);
+    }
 
     res.json({
       success: true,
@@ -75,8 +88,8 @@ exports.translateAlert = async (req, res, next) => {
 
     const translations = {};
     for (const lang of targetLangs) {
-      // Call FastAPI translation endpoint
-      const response = await axios.post(`${env.AI_SERVICE_URL}/translate`, {
+      // Call FastAPI translation endpoint (using correct /ai/translate prefix)
+      const response = await axios.post(`${env.AI_SERVICE_URL}/ai/translate`, {
         text: alert.description,
         targetLang: lang
       });
@@ -118,7 +131,7 @@ exports.predictFlood = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Missing bbox bounds' });
     }
 
-    const response = await axios.post(`${env.AI_SERVICE_URL}/predict-risk`, { bbox });
+    const response = await axios.post(`${env.AI_SERVICE_URL}/ai/predict-risk`, { bbox });
     res.json({ success: true, data: response.data });
   } catch (error) {
     next(error);

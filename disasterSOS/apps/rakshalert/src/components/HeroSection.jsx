@@ -1,8 +1,50 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldCheck, BrainCircuit, Activity } from 'lucide-react';
+import { MapContainer, TileLayer, CircleMarker } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import ThreeBackground from './ThreeBackground';
+import api from '../services/api';
+import { io } from 'socket.io-client';
 
 export default function HeroSection() {
+  const [latestAlert, setLatestAlert] = useState(null);
+
+  useEffect(() => {
+    const fetchLatestAlert = async () => {
+      try {
+        const response = await api.get('/sos/nearby?lat=22.5937&lng=78.9629&radius=5000');
+        if (response.data.success) {
+          const rawAlerts = response.data.data;
+          const activeAlerts = rawAlerts.filter(a => a.status !== 'resolved' && a.status !== 'fake');
+          if (activeAlerts.length > 0) {
+            // Map location coordinate properties cleanly for Leaflet markers
+            const latest = activeAlerts[0];
+            setLatestAlert({
+              ...latest,
+              id: latest.id || latest._id,
+              lat: latest.lat || (latest.location?.coordinates && latest.location.coordinates[1]) || 25.5941,
+              lng: latest.lng || (latest.location?.coordinates && latest.location.coordinates[0]) || 85.1376,
+              reporter: latest.reporter || { fullName: latest.reportedBy?.name || 'Citizen' }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch latest alert for mockup:", err);
+      }
+    };
+
+    fetchLatestAlert();
+
+    const socket = io('http://localhost:5001');
+    socket.on('sos_update', () => {
+      fetchLatestAlert();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -79,29 +121,64 @@ export default function HeroSection() {
               
               {/* Fake Map App UI */}
               <div className="w-full h-full bg-[#1A1A2E] relative p-4 pt-12">
-                <div className="w-full h-48 bg-gray-800 rounded-2xl mb-4 overflow-hidden relative">
-                  <div className="absolute inset-0 bg-[url('https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png')] opacity-20 bg-cover"></div>
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                    <div className="w-3 h-3 rounded-full bg-primary animate-pulse-fast"></div>
-                  </div>
+                <div className="w-full h-48 rounded-2xl mb-4 overflow-hidden relative border border-gray-800 ring-2 ring-red-500/10 bg-gray-900">
+                  <MapContainer
+                    key={latestAlert?.id || 'fallback'}
+                    center={[
+                      latestAlert?.lat || (latestAlert?.location?.coordinates && latestAlert.location.coordinates[1]) || 25.5941,
+                      latestAlert?.lng || (latestAlert?.location?.coordinates && latestAlert.location.coordinates[0]) || 85.1376
+                    ]}
+                    zoom={9}
+                    zoomControl={false}
+                    dragging={false}
+                    doubleClickZoom={false}
+                    scrollWheelZoom={false}
+                    attributionControl={false}
+                    className="w-full h-full z-10"
+                  >
+                    <TileLayer
+                      url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                    />
+                    <CircleMarker
+                      center={[
+                        latestAlert?.lat || (latestAlert?.location?.coordinates && latestAlert.location.coordinates[1]) || 25.5941,
+                        latestAlert?.lng || (latestAlert?.location?.coordinates && latestAlert.location.coordinates[0]) || 85.1376
+                      ]}
+                      pathOptions={{ color: '#D72638', fillColor: '#D72638', fillOpacity: 0.6 }}
+                      radius={12}
+                    />
+                  </MapContainer>
                 </div>
 
                 {/* Floating Alert Card */}
                 <motion.div 
+                  key={latestAlert?.id || 'mock'}
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 1 }}
-                  className="bg-white rounded-2xl p-4 shadow-xl relative z-10"
+                  transition={{ duration: 0.5 }}
+                  className="bg-white rounded-2xl p-4 shadow-xl relative z-10 text-left"
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-black text-gray-900 text-sm">🚨 FLOOD ALERT</h3>
-                    <span className="px-2 py-0.5 bg-red-100 text-red-700 font-bold text-[10px] rounded animate-pulse-fast">CRITICAL</span>
+                    <h3 className="font-black text-gray-900 text-sm uppercase truncate max-w-[130px]">
+                      🚨 {latestAlert ? latestAlert.title : 'WAITING FOR SOS'}
+                    </h3>
+                    <span className={`px-2 py-0.5 font-bold text-[10px] rounded animate-pulse-fast ${
+                      (latestAlert?.severity || 'CRITICAL') === 'CRITICAL' 
+                        ? 'bg-red-100 text-red-700' 
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {latestAlert ? latestAlert.severity : 'STANDBY'}
+                    </span>
                   </div>
-                  <p className="text-xs text-gray-500 font-medium mb-3">Patna, Bihar</p>
-                  <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
-                    Water levels crossed danger mark. Evacuation required immediately for low-lying areas.
+                  <p className="text-xs text-gray-500 font-medium mb-2 truncate">
+                    📍 {latestAlert ? (latestAlert.district || latestAlert.reportedBy?.district || 'Verified Area') : 'All India Monitoring'}
                   </p>
-                  <button className="w-full py-2 bg-primary text-white text-xs font-bold rounded-lg">View Details</button>
+                  <p className="text-[11px] text-gray-600 leading-relaxed mb-3 line-clamp-3">
+                    {latestAlert ? latestAlert.description : 'No active emergencies reported. Standing by for geotagged citizen panic transmissions.'}
+                  </p>
+                  <button onClick={() => document.getElementById('map')?.scrollIntoView({ behavior: 'smooth' })} className="w-full py-2 bg-primary hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">
+                    {latestAlert ? 'View on Live Map' : 'Go to Emergency Map'}
+                  </button>
                 </motion.div>
               </div>
             </div>

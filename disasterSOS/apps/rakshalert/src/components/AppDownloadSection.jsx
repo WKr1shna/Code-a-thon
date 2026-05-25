@@ -12,7 +12,7 @@ export default function AppDownloadSection() {
   ];
 
   return (
-    <section id="download" className="py-24 bg-white relative overflow-hidden">
+    <section id="download" className="py-24 bg-white/75 backdrop-blur-sm relative z-10 overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           

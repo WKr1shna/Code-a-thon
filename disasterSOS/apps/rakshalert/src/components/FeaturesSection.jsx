@@ -53,7 +53,7 @@ export default function FeaturesSection() {
   ];
 
   return (
-    <section id="features" className="py-24 bg-white relative overflow-hidden">
+    <section id="features" className="py-24 bg-white/75 backdrop-blur-sm relative z-10 overflow-hidden">
       {/* 3D AI Network Node Graph Background */}
       <FeaturesBackground />
 

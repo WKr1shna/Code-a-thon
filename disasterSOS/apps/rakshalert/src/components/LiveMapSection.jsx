@@ -9,38 +9,42 @@ import { io } from 'socket.io-client';
 import { LiveMapScanner } from './ThreeVisuals';
 
 export default function LiveMapSection() {
-  const [alerts, setAlerts] = useState(mockAlerts);
+  const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState({
-    active: 47,
-    states: 12,
-    critical: 8,
-    responders: 230
+    active: 0,
+    states: 0,
+    critical: 0,
+    responders: 0
   });
 
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
         const response = await api.get('/sos/nearby?lat=22.5937&lng=78.9629&radius=5000');
-        if (response.data.success && response.data.data.length > 0) {
-          const realAlerts = response.data.data.map(a => ({
-            id: a._id,
+        if (response.data.success) {
+          const rawAlerts = response.data.data || [];
+          const realAlerts = rawAlerts.map(a => ({
+            id: a.id || a._id,
             title: a.title,
             type: a.type,
             severity: a.severity || 'HIGH',
-            lat: a.location.coordinates[1],
-            lng: a.location.coordinates[0],
-            district: a.district || 'Verified Area',
+            lat: a.lat || (a.location?.coordinates && a.location.coordinates[1]) || 12.9716,
+            lng: a.lng || (a.location?.coordinates && a.location.coordinates[0]) || 77.5946,
+            district: a.district || a.reportedBy?.district || 'Verified Area',
             state: a.state || '',
             reportedAt: new Date(a.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            description: a.description
+            description: a.description,
+            status: a.status || 'active'
           }));
           setAlerts(realAlerts);
           
-          setStats(prev => ({
-            ...prev,
-            active: realAlerts.length,
-            critical: realAlerts.filter(a => a.severity === 'CRITICAL').length
-          }));
+          const uniqueStates = new Set(realAlerts.map(a => a.state).filter(Boolean));
+          setStats({
+            active: realAlerts.filter(a => a.status !== 'resolved' && a.status !== 'fake').length,
+            states: uniqueStates.size || (realAlerts.length > 0 ? 1 : 0),
+            critical: realAlerts.filter(a => a.severity === 'CRITICAL' && a.status !== 'resolved').length,
+            responders: realAlerts.filter(a => a.status === 'active').length * 4
+          });
         }
       } catch (err) {
         console.error('Failed to fetch real-time map data:', err);
@@ -54,23 +58,35 @@ export default function LiveMapSection() {
     socket.on('sos_update', (updatedAlert) => {
       setAlerts(prev => {
         const mapped = {
-          id: updatedAlert._id,
+          id: updatedAlert.id || updatedAlert._id,
           title: updatedAlert.title,
           type: updatedAlert.type,
           severity: updatedAlert.severity || 'HIGH',
-          lat: updatedAlert.location.coordinates[1],
-          lng: updatedAlert.location.coordinates[0],
+          lat: updatedAlert.lat || (updatedAlert.location?.coordinates && updatedAlert.location.coordinates[1]) || 12.9716,
+          lng: updatedAlert.lng || (updatedAlert.location?.coordinates && updatedAlert.location.coordinates[0]) || 77.5946,
           district: updatedAlert.district || 'Verified Area',
           state: updatedAlert.state || '',
           reportedAt: new Date(updatedAlert.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          description: updatedAlert.description
+          description: updatedAlert.description,
+          status: updatedAlert.status || 'pending'
         };
-        const exists = prev.find(a => a.id === updatedAlert._id);
+        const exists = prev.find(a => a.id === mapped.id);
+        let newAlerts;
         if (exists) {
-          return prev.map(a => a.id === updatedAlert._id ? mapped : a);
+          newAlerts = prev.map(a => a.id === mapped.id ? mapped : a);
         } else {
-          return [mapped, ...prev];
+          newAlerts = [mapped, ...prev];
         }
+
+        const uniqueStates = new Set(newAlerts.map(a => a.state).filter(Boolean));
+        setStats({
+          active: newAlerts.filter(a => a.status !== 'resolved' && a.status !== 'fake').length,
+          states: uniqueStates.size || (newAlerts.length > 0 ? 1 : 0),
+          critical: newAlerts.filter(a => a.severity === 'CRITICAL' && a.status !== 'resolved').length,
+          responders: newAlerts.filter(a => a.status === 'active').length * 4
+        });
+
+        return newAlerts;
       });
     });
 
@@ -92,7 +108,7 @@ export default function LiveMapSection() {
   };
 
   return (
-    <section id="map" className="py-24 bg-[#F0F4F8]">
+    <section id="map" className="py-24 bg-[#F0F4F8]/75 backdrop-blur-sm relative z-10">
       <div className="max-w-7xl mx-auto px-6">
         
         {/* Header */}
