@@ -42,6 +42,27 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const register = async (userData) => {
+    try {
+      const response = await apiService.post('/auth/register', userData);
+      const { user: userDataReturned, accessToken } = response.data.data;
+      
+      setUser(userDataReturned);
+      setToken(accessToken);
+      
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('user', JSON.stringify(userDataReturned));
+      
+      apiService.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+      return { success: true, user: userDataReturned };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Registration failed. Please try again.' 
+      };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -51,7 +72,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, register, loading }}>
       {children}
     </AuthContext.Provider>
   );
