@@ -4,6 +4,7 @@ const Alert = require('../models/Alert.model');
 const User = require('../models/User.model');
 const Volunteer = require('../models/Volunteer.model');
 const admin = require('../config/firebase');
+const aiController = require('./ai.controller');
 
 exports.reportAlert = async (req, res, next) => {
   try {
@@ -26,15 +27,18 @@ exports.reportAlert = async (req, res, next) => {
 
     await alert.save();
 
-    // Fire and forget verification call to the FastAPI AI service (using correct /ai/verify prefix)
-    axios.post(`${env.AI_SERVICE_URL}/ai/verify`, {
-      alertId: alert._id,
-      text: alert.description,
-      location: {
-        lat: parseFloat(location.lat),
-        lng: parseFloat(location.lng)
-      }
-    }).catch(err => console.error('AI Service verify triggering failed:', err.message));
+    // Trigger internal AI verification pipeline in background to update DB and broadcast updates
+    aiController.performVerification(alert._id)
+      .then(updatedAlert => {
+        if (updatedAlert) {
+          const io = req.app.get('io');
+          if (io) {
+            io.emit('sos_update', updatedAlert);
+            console.log(`📡 Broadcasted verified alert update via sockets for alert: ${alert._id}`);
+          }
+        }
+      })
+      .catch(err => console.error('Background AI verification pipeline failed:', err.message));
 
     // Fetch and populate alert so it matches socket event contract
     const populatedAlert = await Alert.findById(alert._id)

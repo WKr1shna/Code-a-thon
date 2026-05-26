@@ -4,83 +4,92 @@ const Alert = require('../models/Alert.model');
 const admin = require('../config/firebase');
 const User = require('../models/User.model');
 
+exports.performVerification = async (alertId) => {
+  const alert = await Alert.findById(alertId);
+  if (!alert) {
+    return null;
+  }
+
+  // Call FastAPI service to verify spam (using correct /ai/verify prefix)
+  const response = await axios.post(`${env.AI_SERVICE_URL}/ai/verify`, {
+    alertId: alert._id,
+    text: alert.description,
+    location: {
+      lat: alert.location.coordinates[1],
+      lng: alert.location.coordinates[0]
+    }
+  });
+
+  const rawScore = response.data.score !== undefined ? response.data.score : (response.data.spam_score !== undefined ? (1 - response.data.spam_score) : 0.85);
+  const score = parseFloat(rawScore);
+  const breakdown = response.data.breakdown || { verified: response.data.verified };
+  alert.aiScore = score;
+  alert.aiBreakdown = breakdown || {};
+
+  if (score > 0.7) {
+    alert.status = 'verified';
+    
+    // Trigger automatic FCM broadcast to nearby citizens
+    try {
+      const nearbyUsers = await User.find({
+        fcmTokens: { $exists: true, $ne: [] }
+      });
+      const tokens = nearbyUsers.flatMap(u => u.fcmTokens).filter(Boolean);
+      if (tokens.length > 0) {
+        const payload = {
+          data: {
+            title: `CRITICAL ALERT: ${alert.title}`,
+            body: alert.description,
+            alertId: alert._id.toString(),
+            type: alert.type,
+            severity: alert.severity
+          }
+        };
+        const messaging = admin.messaging();
+        for (let i = 0; i < tokens.length; i += 500) {
+          const batch = tokens.slice(i, i + 500);
+          await messaging.sendEachForMulticast({ tokens: batch, ...payload });
+        }
+        console.log(`✅ Automatic AI FCM broadcast sent successfully to ${tokens.length} devices.`);
+      }
+    } catch (fcmErr) {
+      console.error('Automatic AI FCM broadcast failed:', fcmErr.message);
+    }
+  } else if (score < 0.4) {
+    alert.status = 'fake';
+  }
+
+  await alert.save();
+
+  // Fetch and populate alert so it matches socket event contract
+  const populatedAlert = await Alert.findById(alert._id)
+    .populate('reportedBy', 'name phone email role')
+    .populate('claimedBy', 'name phone role');
+
+  return populatedAlert || alert;
+};
+
 exports.verifyAlert = async (req, res, next) => {
   try {
     const { alertId } = req.body;
-    const alert = await Alert.findById(alertId);
-    if (!alert) {
+    const result = await exports.performVerification(alertId);
+    if (!result) {
       return res.status(404).json({ success: false, message: 'Alert not found' });
     }
-
-    // Call FastAPI service to verify spam (using correct /ai/verify prefix)
-    const response = await axios.post(`${env.AI_SERVICE_URL}/ai/verify`, {
-      alertId: alert._id,
-      text: alert.description,
-      location: {
-        lat: alert.location.coordinates[1],
-        lng: alert.location.coordinates[0]
-      }
-    });
-
-    const rawScore = response.data.score !== undefined ? response.data.score : (response.data.spam_score !== undefined ? (1 - response.data.spam_score) : 0.85);
-    const score = parseFloat(rawScore);
-    const breakdown = response.data.breakdown || { verified: response.data.verified };
-    alert.aiScore = score;
-    alert.aiBreakdown = breakdown || {};
-
-    if (score > 0.7) {
-      alert.status = 'verified';
-      
-      // Trigger automatic FCM broadcast to nearby citizens
-      try {
-        const nearbyUsers = await User.find({
-          fcmTokens: { $exists: true, $ne: [] }
-        });
-        const tokens = nearbyUsers.flatMap(u => u.fcmTokens).filter(Boolean);
-        if (tokens.length > 0) {
-          const payload = {
-            data: {
-              title: `CRITICAL ALERT: ${alert.title}`,
-              body: alert.description,
-              alertId: alert._id.toString(),
-              type: alert.type,
-              severity: alert.severity
-            }
-          };
-          const messaging = admin.messaging();
-          for (let i = 0; i < tokens.length; i += 500) {
-            const batch = tokens.slice(i, i + 500);
-            await messaging.sendEachForMulticast({ tokens: batch, ...payload });
-          }
-          console.log(`✅ Automatic AI FCM broadcast sent successfully to ${tokens.length} devices.`);
-        }
-      } catch (fcmErr) {
-        console.error('Automatic AI FCM broadcast failed:', fcmErr.message);
-      }
-    } else if (score < 0.4) {
-      alert.status = 'fake';
-    }
-
-    await alert.save();
-
-    // Fetch and populate alert so it matches socket event contract
-    const populatedAlert = await Alert.findById(alert._id)
-      .populate('reportedBy', 'name phone email role')
-      .populate('claimedBy', 'name phone role');
 
     // Emit live update to synchronize the map on the landing page immediately
     const io = req.app.get('io');
     if (io) {
-      io.emit('sos_update', populatedAlert || alert);
+      io.emit('sos_update', result);
     }
 
     res.json({
       success: true,
       data: {
-        alertId: alert._id,
-        aiScore: alert.aiScore,
-        aiBreakdown: alert.aiBreakdown,
-        status: alert.status
+        alertId: result._id,
+        aiScore: result.aiScore,
+        aiBreakdown: result.aiBreakdown,
+        status: result.status
       }
     });
   } catch (error) {
