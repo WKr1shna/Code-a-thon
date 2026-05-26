@@ -54,7 +54,9 @@ export default function LiveMapSection() {
     fetchAlerts();
     const interval = setInterval(fetchAlerts, 60000);
 
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5050');
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ||
+      (window.location.hostname === 'localhost' ? 'http://localhost:5050' : 'https://code-a-thon-wblx.onrender.com');
+    const socket = io(SOCKET_URL);
     socket.on('sos_update', (updatedAlert) => {
       setAlerts(prev => {
         const mapped = {
