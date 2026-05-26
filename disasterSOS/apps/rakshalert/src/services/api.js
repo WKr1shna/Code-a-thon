@@ -1,12 +1,7 @@
 import axios from 'axios';
 
-const PROD_API = 'https://code-a-thon-wblx.onrender.com/api/v1';
-const DEV_API = 'http://localhost:5050/api/v1';
-const BASE_URL = import.meta.env.VITE_API_URL ||
-  (window.location.hostname === 'localhost' ? DEV_API : PROD_API);
-
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: 'http://localhost:5050/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },

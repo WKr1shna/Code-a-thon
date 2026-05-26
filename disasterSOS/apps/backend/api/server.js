@@ -28,34 +28,7 @@ connectDB();
 
 // Global Middleware
 app.use(helmet());
-
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  // Deployed Render frontends
-  'https://code-a-thon-2.onrender.com',
-  // Additional env-based overrides
-  process.env.FRONTEND_URL,
-  process.env.RAKSHALERT_URL,
-].filter(Boolean);
-
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
-      return callback(null, true);
-    }
-    return callback(new Error(`CORS blocked: ${origin}`));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-
-// Handle preflight requests for all routes
-app.options('*', cors());
+app.use(cors());
 
 app.use(express.json());
 app.use(morgan('dev'));
@@ -133,4 +106,4 @@ io.on('connection', (socket) => {
 module.exports = { app, server, io };
 
 
-// admin@disastersos.com
+// admin@disastersos.com 
