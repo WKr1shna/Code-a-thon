@@ -54,7 +54,7 @@ export default function LiveMapSection() {
     fetchAlerts();
     const interval = setInterval(fetchAlerts, 60000);
 
-    const socket = io('http://localhost:5050');
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5050');
     socket.on('sos_update', (updatedAlert) => {
       setAlerts(prev => {
         const mapped = {

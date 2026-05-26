@@ -75,7 +75,7 @@ export default function SOSAssignmentCenter() {
     const interval = setInterval(fetchData, 30000); // Fallback polling (30s)
 
     // Setup Socket.IO listener for live updates
-    const socket = io('http://localhost:5050');
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5050');
 
     socket.on('connect', () => {
       console.log('[SOCKET] Connected to dispatch server');
