@@ -1,9 +1,9 @@
 const rateLimit = require('express-rate-limit');
 
-// Strict rate limit for SOS report creation: 5 requests per 10 minutes per phone number/IP
+// Strict rate limit for SOS report creation: 150 requests per 10 minutes per phone number/IP (relaxed for dev/presentation)
 const sosLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 5,
+  max: 150,
   message: {
     success: false,
     message: 'Too many SOS alerts reported from this phone number/device. Please wait before submitting another report.'
