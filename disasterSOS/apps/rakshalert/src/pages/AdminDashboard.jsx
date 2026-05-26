@@ -28,7 +28,8 @@ export default function AdminDashboard() {
       id: inc.id || inc._id,
       lat: inc.lat || (inc.location?.coordinates && inc.location.coordinates[1]) || 12.9716,
       lng: inc.lng || (inc.location?.coordinates && inc.location.coordinates[0]) || 77.5946,
-      reporter: inc.reporter || { fullName: inc.reportedBy?.name || 'Citizen' }
+      reporter: inc.reporter || { fullName: inc.reportedBy?.name || 'Citizen' },
+      aiConfidence: inc.aiScore !== undefined ? inc.aiScore : 0.85
     }));
   };
 
