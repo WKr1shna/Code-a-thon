@@ -1,6 +1,8 @@
 const axios = require('axios');
 const env = require('../config/env');
 const Alert = require('../models/Alert.model');
+const admin = require('../config/firebase');
+const User = require('../models/User.model');
 
 exports.verifyAlert = async (req, res, next) => {
   try {
@@ -28,6 +30,33 @@ exports.verifyAlert = async (req, res, next) => {
 
     if (score > 0.7) {
       alert.status = 'verified';
+      
+      // Trigger automatic FCM broadcast to nearby citizens
+      try {
+        const nearbyUsers = await User.find({
+          fcmTokens: { $exists: true, $ne: [] }
+        });
+        const tokens = nearbyUsers.flatMap(u => u.fcmTokens).filter(Boolean);
+        if (tokens.length > 0) {
+          const payload = {
+            data: {
+              title: `CRITICAL ALERT: ${alert.title}`,
+              body: alert.description,
+              alertId: alert._id.toString(),
+              type: alert.type,
+              severity: alert.severity
+            }
+          };
+          const messaging = admin.messaging();
+          for (let i = 0; i < tokens.length; i += 500) {
+            const batch = tokens.slice(i, i + 500);
+            await messaging.sendEachForMulticast({ tokens: batch, ...payload });
+          }
+          console.log(`✅ Automatic AI FCM broadcast sent successfully to ${tokens.length} devices.`);
+        }
+      } catch (fcmErr) {
+        console.error('Automatic AI FCM broadcast failed:', fcmErr.message);
+      }
     } else if (score < 0.4) {
       alert.status = 'fake';
     }

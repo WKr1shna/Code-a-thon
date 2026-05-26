@@ -21,3 +21,12 @@ pyrsc/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Android JADX decompiler temp files
+**/decompiled_src/
+**/jadx_temp/
+
+# Firebase Admin Service Account Credentials
+**/firebase-service-account.json
+**/google-services-private-key.json
+*service-account*.json

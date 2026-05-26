@@ -98,10 +98,10 @@ export default function AdminDashboard() {
       if (broadcastTarget === 'NGO Coordinators') targetRoles = ['ngo'];
       
       const res = await api.post('/broadcast/push', {
-        title: 'Emergency Admin Broadcast',
-        message: broadcastMsg,
-        type: 'PUSH',
-        targets: targetRoles
+        title: '🚨 Emergency Admin Broadcast',
+        body: broadcastMsg,
+        targetRoles: targetRoles,
+        data: { severity: 'critical' }
       });
 
       if (res.data.success) {

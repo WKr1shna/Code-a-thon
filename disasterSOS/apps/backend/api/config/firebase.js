@@ -12,6 +12,9 @@ try {
 
   if (fs.existsSync(serviceAccountPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
     app = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       databaseURL: env.FIREBASE_DATABASE_URL,
