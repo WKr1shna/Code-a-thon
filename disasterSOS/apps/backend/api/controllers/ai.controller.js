@@ -79,7 +79,7 @@ exports.performVerification = async (alertId) => {
       console.error('Automatic AI FCM broadcast failed:', fcmErr.message);
     }
   } else if (parsedScore < 0.4) {
-    alert.status = 'fake';
+    alert.status = 'pending';
   }
 
   await alert.save();
