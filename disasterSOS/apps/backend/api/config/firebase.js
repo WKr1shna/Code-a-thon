@@ -10,8 +10,20 @@ try {
     ? env.FIREBASE_SERVICE_ACCOUNT_PATH
     : path.join(__dirname, '..', env.FIREBASE_SERVICE_ACCOUNT_PATH);
 
+  let serviceAccount = null;
+
   if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
+    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    try {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      console.log('Firebase credentials parsed from FIREBASE_SERVICE_ACCOUNT_JSON environment variable.');
+    } catch (err) {
+      console.error(`Error parsing FIREBASE_SERVICE_ACCOUNT_JSON environment variable: ${err.message}`);
+    }
+  }
+
+  if (serviceAccount) {
     if (serviceAccount.private_key) {
       serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
     }
@@ -23,7 +35,7 @@ try {
     console.log('Firebase Admin SDK initialized successfully.');
   } else {
     // Fallback for development if file doesn't exist
-    console.warn(`Firebase service account file not found at: ${serviceAccountPath}. Using mock Firebase initialization.`);
+    console.warn(`Firebase service account file not found and no environment fallback provided. Using mock Firebase initialization.`);
     app = admin.initializeApp({
       projectId: 'mock-disaster-response',
       databaseURL: env.FIREBASE_DATABASE_URL || 'https://mock.firebaseio.com',
