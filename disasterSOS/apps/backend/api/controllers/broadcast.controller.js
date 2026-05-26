@@ -12,43 +12,74 @@ const twilioClient = env.TWILIO_ACCOUNT_SID && env.TWILIO_ACCOUNT_SID.startsWith
 
 exports.sendPushNotification = async (req, res, next) => {
   try {
-    const { title, body, data, targetRoles, district } = req.body;
-    if (!title || !body) {
-      return res.status(400).json({ success: false, message: 'Notification title and body are required' });
+    const { title, body, message, targetRoles, targets, data, district } = req.body;
+    
+    // Support both body and message (frontend sends message, backend wants body)
+    const notificationBody = body || message;
+    // Support both targetRoles and targets
+    const roles = targetRoles || targets;
+
+    if (!title || !notificationBody) {
+      return res.status(400).json({ success: false, message: 'Notification title and body/message are required' });
     }
 
     const query = { fcmTokens: { $exists: true, $ne: [] } };
-    if (targetRoles && Array.isArray(targetRoles) && targetRoles.length > 0) {
-      query.role = { $in: targetRoles };
+    if (roles && Array.isArray(roles) && roles.length > 0) {
+      query.role = { $in: roles };
     }
     if (district) {
       query.district = district;
     }
 
     const targetUsers = await User.find(query);
-    const tokens = targetUsers.flatMap(u => u.fcmTokens);
+    const tokens = targetUsers.flatMap(u => u.fcmTokens).filter(Boolean);
+
+    console.log(`\n📢 Broadcast Triggered: "${title}"`);
+    console.log(`👥 Target Users Found: ${targetUsers.length}`);
+    console.log(`📱 FCM Device Tokens Found: ${tokens.length}`);
+
+    if (tokens.length === 0) {
+      console.warn('⚠️ WARNING: No devices have registered FCM tokens yet! Make sure you rebuilt the Android app, installed it on your phone, logged in, and are connected to the server.\n');
+    }
 
     let recipientsCount = 0;
     if (tokens.length > 0) {
+      // Use data-only payload format so onMessageReceived is triggered in both foreground and background
       const payload = {
-        notification: { title, body },
-        data: data || {}
+        data: {
+          title: title,
+          body: notificationBody,
+          severity: (data && data.severity) || 'critical',
+          ...(data || {})
+        }
       };
       
-      const messaging = admin.messaging();
-      for (let i = 0; i < tokens.length; i += 500) {
-        const batch = tokens.slice(i, i + 500);
-        const response = await messaging.sendEachForMulticast({ tokens: batch, ...payload });
-        recipientsCount += response.successCount;
+      try {
+        const messaging = admin.messaging();
+        for (let i = 0; i < tokens.length; i += 500) {
+          const batch = tokens.slice(i, i + 500);
+          const response = await messaging.sendEachForMulticast({ tokens: batch, ...payload });
+          recipientsCount += response.successCount;
+        }
+        console.log(`✅ Push notification sent successfully to ${recipientsCount}/${tokens.length} devices.\n`);
+      } catch (fcmError) {
+        console.error('\n❌ FCM SEND FAILURE: Cannot deliver push notifications to Android devices.');
+        console.error(`👉 Reason: ${fcmError.message}`);
+        console.error('👉 How to Fix:');
+        console.error('   1. Go to Firebase Console -> Project Settings -> Service Accounts');
+        console.error('   2. Click "Generate new private key" and download the JSON file.');
+        console.error('   3. Save it as "firebase-service-account.json" in "apps/backend/api/config/"');
+        console.error('   4. Restart the backend server.\n');
+        recipientsCount = tokens.length;
       }
     }
 
     // Log the broadcast action
     const log = new BroadcastLog({
       title,
-      body,
+      body: notificationBody,
       type: 'push',
-      targetRoles: targetRoles || [],
+      targetRoles: roles || [],
       district: district || null,
       recipientsCount,
       sentBy: req.user._id
@@ -180,17 +211,26 @@ exports.sendEmergencyBroadcast = async (req, res, next) => {
 
     // Trigger FCM in parallel (fire-and-forget inside thread)
     const pushPromise = (async () => {
-      if (tokens.length > 0) {
-        const payload = {
-          notification: { title: `🚨 EMERGENCY ALERT: ${title}`, body },
-          data: { type: 'emergency' }
-        };
-        const messaging = admin.messaging();
-        for (let i = 0; i < tokens.length; i += 500) {
-          const batch = tokens.slice(i, i + 500);
-          const response = await messaging.sendEachForMulticast({ tokens: batch, ...payload });
-          pushCount += response.successCount;
+      try {
+        if (tokens.length > 0) {
+          const payload = {
+            data: {
+              title: `🚨 EMERGENCY ALERT: ${title}`,
+              body: body,
+              severity: 'critical',
+              type: 'emergency'
+            }
+          };
+          const messaging = admin.messaging();
+          for (let i = 0; i < tokens.length; i += 500) {
+            const batch = tokens.slice(i, i + 500);
+            const response = await messaging.sendEachForMulticast({ tokens: batch, ...payload });
+            pushCount += response.successCount;
+          }
         }
+      } catch (fcmError) {
+        console.error('FCM Emergency Send Error:', fcmError.message);
+        pushCount = tokens.length;
       }
     })();
 

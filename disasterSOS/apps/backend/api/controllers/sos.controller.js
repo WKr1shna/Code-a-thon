@@ -217,11 +217,9 @@ exports.updateAlertStatus = async (req, res, next) => {
         if (tokens.length > 0) {
           // Firebase FCM notification dispatch
           const payload = {
-            notification: {
-              title: `CRITICAL ALERT: ${alert.title}`,
-              body: alert.description
-            },
             data: {
+              title: `CRITICAL ALERT: ${alert.title}`,
+              body: alert.description,
               alertId: alert._id.toString(),
               type: alert.type,
               severity: alert.severity
@@ -239,6 +237,13 @@ exports.updateAlertStatus = async (req, res, next) => {
       } catch (fcmErr) {
         console.error('FCM broadcast for alert verification failed:', fcmErr.message);
       }
+    }
+
+    if (alert.reportedBy) {
+      await alert.populate('reportedBy', 'name phone email role');
+    }
+    if (alert.claimedBy) {
+      await alert.populate('claimedBy', 'name phone role');
     }
 
     res.json({ success: true, data: alert });
@@ -293,6 +298,13 @@ exports.addAlertMedia = async (req, res, next) => {
 
     alert.mediaUrls.push(...mediaUrls);
     await alert.save();
+
+    if (alert.reportedBy) {
+      await alert.populate('reportedBy', 'name phone email role');
+    }
+    if (alert.claimedBy) {
+      await alert.populate('claimedBy', 'name phone role');
+    }
 
     res.json({ success: true, data: alert });
   } catch (error) {

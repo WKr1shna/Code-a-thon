@@ -64,9 +64,23 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start listening
-const server = app.listen(env.PORT, () => {
-  console.log(`Server running in production-ready mode on port ${env.PORT}`);
+// Start listening on all network interfaces (0.0.0.0) so other devices can reach this server
+const HOST = '0.0.0.0';
+const server = app.listen(env.PORT, HOST, () => {
+  const { networkInterfaces } = require('os');
+  const nets = networkInterfaces();
+  let localIP = 'localhost';
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        localIP = net.address;
+        break;
+      }
+    }
+  }
+  console.log(`✅ Server running in production-ready mode`);
+  console.log(`   Local:   http://localhost:${env.PORT}`);
+  console.log(`   Network: http://${localIP}:${env.PORT}  ← use this on other devices`);
 });
 
 // Initialize Socket.io
@@ -89,3 +103,6 @@ io.on('connection', (socket) => {
 });
 
 module.exports = { app, server, io };
+
+
+// admin@disastersos.com
