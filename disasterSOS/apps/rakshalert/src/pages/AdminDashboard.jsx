@@ -217,11 +217,11 @@ export default function AdminDashboard() {
               </h3>
               
               <div className="grid gap-4">
-                {incidents.filter(i => i.status !== 'FAKE').slice(0, 10).map((inc) => (
+                {incidents.filter(i => i.status?.toUpperCase() !== 'FAKE').slice(0, 10).map((inc) => (
                   <div key={inc.id} className="bg-gray-800/80 p-5 rounded-2xl border border-gray-700/50 flex flex-col md:flex-row justify-between items-start md:items-center hover:bg-gray-800 transition cursor-default">
                     <div className="mb-4 md:mb-0">
                       <div className="flex items-center space-x-3 mb-1">
-                        <span className={`w-2 h-2 rounded-full ${inc.status === 'ACTIVE' ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                        <span className={`w-2 h-2 rounded-full ${inc.status?.toUpperCase() === 'ACTIVE' ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
                         <h4 className="font-bold text-lg text-white">{inc.title}</h4>
                       </div>
                       <p className="text-sm text-gray-400 pl-5">{inc.description}</p>

@@ -261,7 +261,7 @@ export default function UserDashboard() {
               </h2>
               
               <div className="space-y-4">
-                {incidents.filter(i => i.status !== 'FAKE').map((inc) => (
+                {incidents.filter(i => i.status?.toUpperCase() !== 'FAKE').map((inc) => (
                   <div key={inc.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center">
                     <div className="mb-4 md:mb-0">
                       <h4 className="font-bold text-lg text-secondary">{inc.title}</h4>
