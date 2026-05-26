@@ -33,6 +33,9 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
+  // Deployed Render frontends
+  'https://code-a-thon-2.onrender.com',
+  // Additional env-based overrides
   process.env.FRONTEND_URL,
   process.env.RAKSHALERT_URL,
 ].filter(Boolean);
