@@ -5,7 +5,7 @@ const AlertSchema = new mongoose.Schema({
   description: { type: String, required: true },
   type: {
     type: String,
-    enum: ['flood', 'earthquake', 'fire', 'landslide', 'urban', 'other'],
+    enum: ['flood', 'earthquake', 'fire', 'landslide', 'urban', 'cyclone', 'medical', 'accident', 'other'],
     required: true
   },
   severity: {
